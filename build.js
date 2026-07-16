@@ -462,6 +462,7 @@ button.btn:disabled { opacity:0.45; cursor:not-allowed; }
   <div class="trainer-header">
     <div class="trainer-controls">
       <button class="btn primary" id="startSimBtn">Start Simulation</button>
+      <button class="btn warn" id="forceCompleteBtn" disabled title="End session early and generate analytics from finished students">Force Complete</button>
       <button class="btn ghost" id="resetSessionBtn">Reset Session</button>
     </div>
   </div>

@@ -374,6 +374,42 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('trainer:forceComplete', async () => {
+    try {
+      if (!trainers.has(socket.id)) return;
+
+      const meta = await sessionStore.getMeta();
+      if (meta.status !== 'active') return;
+
+      const participants = await sessionStore.getAllParticipants();
+      let hasAnyCompleted = false;
+
+      for (const [, p] of participants) {
+        if (p.status === 'Completed') {
+          hasAnyCompleted = true;
+          continue;
+        }
+        // Mark unfinished participants so the trainer can see who dropped out
+        p.status = 'Incomplete';
+        p.currentQuestion = p.currentQuestion && p.currentQuestion !== '—'
+          ? p.currentQuestion
+          : 'Stopped';
+        await sessionStore.setParticipant(p);
+      }
+
+      await sessionStore.setMeta({ ...meta, status: 'completed' });
+      await broadcastSession();
+      socket.emit('trainer:forceCompleted', {
+        hasAnalytics: hasAnyCompleted,
+        message: hasAnyCompleted
+          ? 'Session force-completed. Analytics generated from finished participants.'
+          : 'Session force-completed, but no students finished yet — analytics are empty.'
+      });
+    } catch (err) {
+      console.error('trainer:forceComplete error:', err);
+    }
+  });
+
   socket.on('student:progress', async (data) => {
     try {
       const meta = await sessionStore.getMeta();
@@ -402,6 +438,7 @@ io.on('connection', (socket) => {
       const p = socket.participantId ? await sessionStore.getParticipant(socket.participantId) : null;
       if (!p) return;
 
+      // Allow finish even after trainer force-completes the session
       p.status = 'Completed';
       p.currentQuestion = 'Finished';
       p.questionsAttempted = data.questionsAttempted ?? 20;

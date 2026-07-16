@@ -49,6 +49,7 @@
   function statusClass(status) {
     if (status === 'Waiting') return 'status-waiting';
     if (status === 'Completed') return 'status-completed';
+    if (status === 'Incomplete') return 'status-incomplete';
     return 'status-progress';
   }
 
@@ -88,6 +89,22 @@
     if (confirm('Reset the entire session? All students must log in again.')) {
       socket.emit('trainer:reset');
     }
+  });
+
+  document.getElementById('forceCompleteBtn').addEventListener('click', () => {
+    if (confirm('Force complete this session?\n\nUnfinished students will be marked Incomplete. Analytics and leaderboard will be generated from students who already finished.')) {
+      socket.emit('trainer:forceComplete');
+    }
+  });
+
+  socket.on('trainer:forceCompleted', ({ message }) => {
+    // Switch trainer to Batch Analytics tab
+    document.querySelectorAll('.trainer-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const analyticsTab = document.querySelector('.trainer-tab[data-tab="analytics"]');
+    if (analyticsTab) analyticsTab.classList.add('active');
+    document.getElementById('tab-analytics').classList.add('active');
+    if (message) alert(message);
   });
 
   document.querySelectorAll('.trainer-tab').forEach(tab => {
@@ -253,6 +270,7 @@
     badge.className = 'badge ' + session.status;
 
     document.getElementById('startSimBtn').disabled = session.status !== 'waiting';
+    document.getElementById('forceCompleteBtn').disabled = session.status !== 'active';
 
     const participants = session.participants || [];
     let liveHtml = '<table class="grid"><thead><tr><th>Student Name</th><th>Status</th><th>Current Question</th><th>Questions Attempted</th><th>Current Score</th><th>Completion %</th></tr></thead><tbody>';
@@ -303,7 +321,7 @@
       html += '<div class="insight-box">' + escapeHtml(a.facilitatorInsights) + '</div>';
       analyticsEl.innerHTML = html;
     } else {
-      analyticsEl.innerHTML = '<p class="round-brief">Analytics will appear when all participants complete the simulation.</p>';
+      analyticsEl.innerHTML = '<p class="round-brief">No finished participants yet. Analytics need at least one completed student. Use <strong>Force Complete</strong> after some students finish, or wait for everyone to complete.</p>';
     }
   }
 

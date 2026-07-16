@@ -122,6 +122,8 @@
   button.btn:active{transform:scale(.98);}
   button.btn.primary{background:var(--navy); color:var(--white);}
   button.btn.primary:hover{background:var(--navy-light);}
+  button.btn.warn{background:var(--orange); color:var(--white);}
+  button.btn.warn:hover{opacity:.92;}
   button.btn.ghost{background:transparent; color:var(--slate); border:1.5px solid var(--grid-line);}
 
   .intro-scenario{background:var(--navy); color:var(--white); border-radius:10px; padding:22px 24px; margin-bottom:18px;}
@@ -235,6 +237,7 @@ body.platform-trainer {
 .status-waiting { color:#B8860B; font-weight:700; }
 .status-progress { color:var(--teal); font-weight:700; }
 .status-completed { color:var(--navy); font-weight:700; }
+.status-incomplete { color:var(--orange); font-weight:700; }
 .highlight-row { background:var(--teal-light) !important; outline:2px solid var(--teal); }
 .analytics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
 .stat-card { border:1px solid var(--grid-line); border-radius:8px; padding:12px; text-align:center; }
@@ -342,6 +345,7 @@ button.btn:disabled { opacity:0.45; cursor:not-allowed; }
   <div class="trainer-header">
     <div class="trainer-controls">
       <button class="btn primary" id="startSimBtn">Start Simulation</button>
+      <button class="btn warn" id="forceCompleteBtn" disabled title="End session early and generate analytics from finished students">Force Complete</button>
       <button class="btn ghost" id="resetSessionBtn">Reset Session</button>
     </div>
   </div>
@@ -358,7 +362,7 @@ button.btn:disabled { opacity:0.45; cursor:not-allowed; }
     <div class="panel"><h3>Session Leaderboard</h3><div id="trainerLeaderboard"></div></div>
   </div>
   <div id="tab-analytics" class="tab-content">
-    <div class="panel"><h3>Facilitator Report</h3><div id="trainerAnalytics"><p class="round-brief">Analytics will appear when all participants complete the simulation.</p></div></div>
+    <div class="panel"><h3>Facilitator Report</h3><div id="trainerAnalytics"><p class="round-brief">Analytics appear when all participants finish, or when you click <strong>Force Complete</strong>.</p></div></div>
   </div>
   <div id="tab-reference" class="tab-content">
     <div class="panel"><h3>Trainer Reference</h3><div id="trainerReference" class="ref-panel"></div></div>
