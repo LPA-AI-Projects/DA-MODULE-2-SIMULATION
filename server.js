@@ -451,27 +451,33 @@ io.on('connection', (socket) => {
 });
 
 async function setupSocketAdapter() {
-  if (!process.env.REDIS_URL) return;
+  const url = sessionStore.getRedisUrl();
+  if (!url || !sessionStore.isRedisConnected()) return;
 
-  const { createClient } = require('redis');
-  const { createAdapter } = require('@socket.io/redis-adapter');
+  try {
+    const { createClient } = require('redis');
+    const { createAdapter } = require('@socket.io/redis-adapter');
 
-  const pubClient = createClient({ url: process.env.REDIS_URL });
-  const subClient = pubClient.duplicate();
+    const pubClient = createClient({ url });
+    const subClient = pubClient.duplicate();
 
-  pubClient.on('error', (err) => console.error('Redis pub error:', err.message));
-  subClient.on('error', (err) => console.error('Redis sub error:', err.message));
+    pubClient.on('error', (err) => console.error('Redis pub error:', err.message));
+    subClient.on('error', (err) => console.error('Redis sub error:', err.message));
 
-  await Promise.all([pubClient.connect(), subClient.connect()]);
-  io.adapter(createAdapter(pubClient, subClient));
-  console.log('Socket.io Redis adapter enabled.');
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('Socket.io Redis adapter enabled.');
+  } catch (err) {
+    console.error('Socket.io Redis adapter failed (continuing without it):', err.message);
+  }
 }
 
 async function start() {
   await sessionStore.connect();
   await setupSocketAdapter();
 
-  server.listen(PORT, () => {
+  // Bind to 0.0.0.0 so Railway proxy can reach the app
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Simulation platform running on port ${PORT}`);
     console.log(`Redis: ${sessionStore.isRedisConnected() ? 'connected' : 'in-memory fallback'}`);
   });
