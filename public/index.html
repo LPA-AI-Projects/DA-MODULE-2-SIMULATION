@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gulf Freight Co. — Simulation Platform</title>
+<style>
+
+  :root{
+    --navy:#1A2B4A;
+    --navy-light:#23385f;
+    --teal:#0E9E8E;
+    --teal-light:#E5F5F3;
+    --orange:#F2541D;
+    --orange-light:#FDEAE3;
+    --paper:#F7F5F0;
+    --ink:#1A2B4A;
+    --slate:#5B6B82;
+    --white:#FFFFFF;
+    --grid-line:#D8DCE4;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:Calibri, "Segoe UI", Arial, sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 16px 60px;
+  }
+  .app{width:100%; max-width:780px;}
+  .ribbon{
+    background:var(--navy); color:var(--white);
+    border-radius:10px 10px 0 0; padding:16px 22px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .ribbon .brand{display:flex; align-items:baseline; gap:10px;}
+  .ribbon .brand .mark{
+    font-family:Consolas,"Courier New",monospace; font-weight:700; font-size:13px;
+    letter-spacing:.08em; background:var(--teal); color:var(--navy); padding:3px 7px; border-radius:4px;
+  }
+  .ribbon h1{font-size:17px; margin:0; font-weight:700;}
+  .ribbon .sub{font-size:12px; color:#B9C4D6; margin-top:2px;}
+  .fx-bar{
+    background:var(--navy-light); color:#C9D3E4; font-family:Consolas,"Courier New",monospace;
+    font-size:12px; padding:7px 22px; border-bottom:1px solid #33456b;
+    display:flex; align-items:center; gap:8px;
+  }
+  .fx-bar .cell-ref{background:#0f1c33; color:var(--teal); padding:2px 8px; border-radius:3px; font-weight:700;}
+  .stage{
+    background:var(--white); border:1px solid var(--grid-line); border-top:none;
+    border-radius:0 0 10px 10px; padding:26px 26px 22px; min-height:440px;
+  }
+
+  /* Topic-level tracker */
+  .tracker{display:flex; gap:6px; margin-bottom:10px;}
+  .tracker .seg{flex:1; height:6px; border-radius:3px; background:var(--grid-line); position:relative; overflow:hidden;}
+  .tracker .seg.done{background:var(--teal);}
+  .tracker .seg.active-fill{background:var(--grid-line);}
+  .tracker .seg.active-fill .fill{position:absolute; left:0; top:0; bottom:0; background:var(--orange); border-radius:3px; transition:width .25s ease;}
+
+  /* Dot progress within topic */
+  .dots{display:flex; gap:7px; margin-bottom:18px;}
+  .dots .dot{width:9px; height:9px; border-radius:50%; background:var(--grid-line);}
+  .dots .dot.done{background:var(--teal);}
+  .dots .dot.current{background:var(--orange);}
+
+  .eyebrow{
+    font-family:Consolas,"Courier New",monospace; font-size:11.5px; color:var(--teal);
+    font-weight:700; letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px;
+  }
+  h2.round-title{font-size:21px; margin:0 0 4px; color:var(--navy);}
+  p.round-brief{color:var(--slate); font-size:14.5px; line-height:1.55; margin:0 0 16px; max-width:64ch;}
+
+  table.grid{width:100%; border-collapse:collapse; font-family:Consolas,"Courier New",monospace; font-size:13.5px; margin-bottom:10px;}
+  table.grid th{background:#EEF1F6; color:var(--slate); font-weight:700; text-align:left; padding:8px 10px; border:1px solid var(--grid-line); font-size:12px;}
+  table.grid td{padding:9px 10px; border:1px solid var(--grid-line); color:var(--ink);}
+  table.grid td.num{text-align:right;}
+  table.grid td.txt-left{text-align:left;}
+  table.grid tr.tappable-row{cursor:pointer; transition:background .12s ease;}
+  table.grid tr.tappable-row:hover{background:var(--teal-light);}
+  table.grid tr.row-selected{background:var(--orange-light) !important; outline:2px solid var(--orange); outline-offset:-2px;}
+  td.tap-cell{cursor:pointer;}
+  td.tap-cell:hover{outline:2px solid var(--teal); outline-offset:-2px;}
+  td.tap-cell.pre-flag{background:var(--orange-light); font-weight:700; color:var(--orange);}
+  td.tap-cell.cell-selected{background:var(--orange) !important; color:var(--white) !important; outline:2px solid var(--navy); outline-offset:-2px;}
+  .blank-cell{color:#B9C0CC; font-style:italic;}
+
+  .note-strip{
+    background:var(--teal-light); border-left:3px solid var(--teal); padding:9px 12px;
+    font-size:12.5px; color:var(--navy); border-radius:0 6px 6px 0; margin:6px 0 18px;
+  }
+  .fact-strip{
+    background:#F2F4F7; border-left:3px solid var(--navy); padding:9px 12px;
+    font-size:13px; color:var(--navy); border-radius:0 6px 6px 0; margin:6px 0 16px; font-family:Consolas,monospace;
+  }
+  .formula-strip{
+    background:var(--teal-light); border-left:3px solid var(--teal); padding:10px 14px;
+    font-family:Consolas,"Courier New",monospace; font-size:13px; color:var(--navy);
+    border-radius:0 6px 6px 0; margin:6px 0 16px;
+  }
+
+  .options{display:flex; flex-direction:column; gap:9px; margin-top:4px;}
+  .opt{display:flex; align-items:center; gap:11px; border:1.5px solid var(--grid-line); border-radius:8px; padding:12px 14px; cursor:pointer; background:var(--white); transition:border-color .12s ease, background .12s ease;}
+  .opt:hover{border-color:var(--teal); background:var(--teal-light);}
+  .opt.selected{border-color:var(--orange); background:var(--orange-light);}
+  .opt .tag{font-family:Consolas,monospace; font-weight:700; font-size:12px; color:var(--white); background:var(--navy); width:22px; height:22px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .opt code{font-family:Consolas,"Courier New",monospace; font-size:12.5px; color:var(--navy);}
+  .opt .plain{font-size:14px; color:var(--ink);}
+
+  .feedback{margin-top:16px; padding:14px 16px; border-radius:8px; font-size:14px; line-height:1.55; display:none;}
+  .feedback.show{display:block;}
+  .feedback.correct{background:var(--teal-light); border-left:4px solid var(--teal); color:var(--navy);}
+  .feedback.wrong{background:var(--orange-light); border-left:4px solid var(--orange); color:var(--navy);}
+  .feedback .fb-head{font-weight:700; margin-bottom:4px;}
+
+  .actions{margin-top:18px; display:flex; justify-content:flex-end; gap:10px;}
+  button.btn{font-family:Calibri,"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:700; padding:11px 22px; border-radius:7px; border:none; cursor:pointer; transition:opacity .12s ease, transform .08s ease;}
+  button.btn:active{transform:scale(.98);}
+  button.btn.primary{background:var(--navy); color:var(--white);}
+  button.btn.primary:hover{background:var(--navy-light);}
+  button.btn.ghost{background:transparent; color:var(--slate); border:1.5px solid var(--grid-line);}
+
+  .intro-scenario{background:var(--navy); color:var(--white); border-radius:10px; padding:22px 24px; margin-bottom:18px;}
+  .intro-scenario h3{margin:0 0 8px; font-size:17px;}
+  .intro-scenario p{margin:0; font-size:14px; line-height:1.6; color:#CBD5E7;}
+  .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0 6px;}
+  .kpi{border:1px solid var(--grid-line); border-radius:8px; padding:12px 10px; text-align:center;}
+  .kpi .n{font-family:Consolas,monospace; font-weight:700; font-size:15px; color:var(--navy);}
+  .kpi .l{font-size:11px; color:var(--slate); margin-top:3px;}
+  ul.topics-list{margin:14px 0 0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:7px;}
+  ul.topics-list li{font-size:13.5px; color:var(--slate); display:flex; gap:9px; align-items:baseline;}
+  ul.topics-list .num{font-family:Consolas,monospace; font-weight:700; color:var(--teal); font-size:12px;}
+
+  .topic-card{background:var(--teal-light); border-radius:10px; padding:22px 24px; margin-bottom:6px;}
+  .topic-card .eyebrow2{font-family:Consolas,monospace; font-size:11.5px; color:var(--teal); font-weight:700; letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px;}
+  .topic-card h2{margin:0 0 8px; font-size:22px; color:var(--navy);}
+  .topic-card p{margin:0; font-size:14px; line-height:1.6; color:var(--navy);}
+
+  .recap-score{text-align:center; padding:14px 0 6px;}
+  .recap-score .big{font-family:Consolas,monospace; font-size:44px; font-weight:700; color:var(--navy); line-height:1;}
+  .recap-score .of{font-size:13px; color:var(--slate); margin-top:4px;}
+  .recap-list{display:flex; flex-direction:column; gap:7px; margin:18px 0 4px;}
+  .recap-list .row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--grid-line); border-radius:7px; padding:9px 13px; font-size:13px;}
+  .recap-list .row .name{color:var(--ink);}
+  .recap-list .row .pts{font-family:Consolas,monospace; font-weight:700; padding:2px 9px; border-radius:12px; font-size:12px;}
+  .pts.full{background:var(--teal-light); color:var(--teal);}
+  .pts.half{background:#FFF3D6; color:#B8860B;}
+  .pts.zero{background:var(--orange-light); color:var(--orange);}
+
+  .results-score{text-align:center; padding:16px 0 6px;}
+  .results-score .big{font-family:Consolas,monospace; font-size:54px; font-weight:700; color:var(--navy); line-height:1;}
+  .results-score .of{font-size:14px; color:var(--slate); margin-top:4px;}
+  .topic-breakdown{display:flex; flex-direction:column; gap:8px; margin-top:20px;}
+  .topic-breakdown .row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--grid-line); border-radius:7px; padding:10px 14px; font-size:13.5px;}
+  .topic-breakdown .row .name{color:var(--ink); font-weight:600;}
+  .topic-breakdown .row .pts{font-family:Consolas,monospace; font-weight:700; color:var(--navy);}
+
+  @media (max-width:520px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    table.grid{font-size:11.5px;}
+    .stage{padding:20px 16px;}
+  }
+
+/* Platform layer */
+body.platform-login, body.platform-waiting, body.platform-sim, body.platform-complete {
+  align-items:center;
+  justify-content:center;
+}
+body.platform-trainer {
+  align-items:flex-start;
+  justify-content:center;
+}
+.view {
+  display:none;
+  width:100%;
+  max-width:960px;
+  margin:0 auto;
+}
+.view.active { display:block; }
+#waitingView.active, #simView.active, #completeView.active {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:100%;
+}
+#waitingView .app, #simView .app, #completeView .app {
+  margin:0 auto;
+  width:100%;
+  max-width:780px;
+}
+#trainerView.active {
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  max-width:1100px;
+}
+.login-wrap { max-width:520px; margin:0 auto; }
+.login-card { background:var(--white); border:1px solid var(--grid-line); border-radius:12px; padding:28px; box-shadow:0 4px 24px rgba(26,43,74,.08); }
+.login-card h2 { margin:0 0 6px; color:var(--navy); font-size:22px; }
+.login-card .lead { color:var(--slate); font-size:14px; margin:0 0 22px; line-height:1.5; }
+.role-tabs { display:flex; gap:8px; margin-bottom:22px; }
+.role-tab { flex:1; padding:12px; border:1.5px solid var(--grid-line); border-radius:8px; background:var(--white); cursor:pointer; font-weight:700; color:var(--slate); text-align:center; }
+.role-tab.active { border-color:var(--teal); background:var(--teal-light); color:var(--navy); }
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; font-weight:700; color:var(--slate); margin-bottom:5px; text-transform:uppercase; letter-spacing:.06em; }
+.form-group input { width:100%; padding:11px 12px; border:1.5px solid var(--grid-line); border-radius:7px; font-size:14px; font-family:inherit; }
+.form-group input:focus { outline:none; border-color:var(--teal); }
+.error-msg { color:var(--orange); font-size:13px; margin-top:10px; display:none; }
+.error-msg.show { display:block; }
+.waiting-box { text-align:center; padding:48px 24px; }
+.waiting-box .pulse { width:14px; height:14px; border-radius:50%; background:var(--teal); display:inline-block; animation:pulse 1.4s infinite; margin-right:8px; vertical-align:middle; }
+@keyframes pulse { 0%,100%{opacity:.3;transform:scale(.9)} 50%{opacity:1;transform:scale(1)} }
+.waiting-box h2 { color:var(--navy); margin:16px 0 8px; }
+.waiting-box p { color:var(--slate); }
+.trainer-header {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-start;
+  gap:12px;
+  margin:0;
+}
+.trainer-controls { display:flex; gap:12px; flex-wrap:wrap; }
+.trainer-controls .btn { min-width:140px; }
+.badge { font-family:Consolas,monospace; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; }
+.badge.waiting { background:#FFF3D6; color:#B8860B; }
+.badge.active { background:var(--teal-light); color:var(--teal); }
+.badge.completed { background:var(--orange-light); color:var(--orange); }
+.panel { background:var(--white); border:1px solid var(--grid-line); border-radius:10px; padding:18px; margin-bottom:16px; }
+.panel h3 { margin:0 0 12px; font-size:16px; color:var(--navy); }
+.status-waiting { color:#B8860B; font-weight:700; }
+.status-progress { color:var(--teal); font-weight:700; }
+.status-completed { color:var(--navy); font-weight:700; }
+.highlight-row { background:var(--teal-light) !important; outline:2px solid var(--teal); }
+.analytics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+.stat-card { border:1px solid var(--grid-line); border-radius:8px; padding:12px; text-align:center; }
+.stat-card .val { font-family:Consolas,monospace; font-size:20px; font-weight:700; color:var(--navy); }
+.stat-card .lbl { font-size:11px; color:var(--slate); margin-top:4px; }
+.insight-box { background:var(--teal-light); border-left:4px solid var(--teal); padding:14px 16px; border-radius:0 8px 8px 0; font-size:14px; line-height:1.6; color:var(--navy); margin-top:12px; }
+.ref-panel { max-height:420px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--ink); }
+.ref-panel h4 { color:var(--navy); margin:18px 0 8px; font-size:14px; }
+.ref-panel p { margin:0 0 10px; color:var(--slate); }
+.completion-section { margin-bottom:28px; }
+.completion-section h3 { font-size:17px; color:var(--navy); margin:0 0 12px; border-bottom:2px solid var(--teal-light); padding-bottom:8px; }
+.score-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px; }
+.score-item { border:1px solid var(--grid-line); border-radius:8px; padding:12px; text-align:center; }
+.score-item .n { font-family:Consolas,monospace; font-size:22px; font-weight:700; color:var(--navy); }
+.score-item .l { font-size:11px; color:var(--slate); margin-top:4px; }
+.report-list { display:flex; flex-direction:column; gap:8px; }
+.report-row { border:1px solid var(--grid-line); border-radius:7px; padding:10px 12px; font-size:13px; }
+.participant-email { display:block; font-size:12px; color:var(--slate); margin-top:2px; font-family:Calibri,"Segoe UI",Arial,sans-serif; }
+.trainer-tabs {
+  display:flex;
+  gap:8px;
+  margin:4px 0 0;
+  flex-wrap:wrap;
+}
+.trainer-tab {
+  padding:10px 16px;
+  border:1.5px solid var(--grid-line);
+  border-radius:7px;
+  background:var(--white);
+  cursor:pointer;
+  font-size:13px;
+  font-weight:700;
+  color:var(--slate);
+  white-space:nowrap;
+}
+.trainer-tab.active { border-color:var(--navy); background:var(--navy); color:var(--white); }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+button.btn:disabled { opacity:0.45; cursor:not-allowed; }
+#trainerView .ribbon { border-radius:10px; flex-shrink:0; }
+#trainerView .panel { margin-bottom:0; }
+@media (max-width:520px){
+  .trainer-header{flex-direction:column;align-items:stretch;}
+  .trainer-controls .btn { width:100%; min-width:0; }
+  .trainer-tab { flex:1 1 calc(50% - 8px); text-align:center; }
+}
+</style>
+</head>
+<body class="platform-login">
+<div id="loginView" class="view active login-wrap" aria-hidden="false">
+  <div class="ribbon" style="border-radius:10px;margin-bottom:16px;">
+    <div class="brand"><span class="mark">LP</span><div><h1>Gulf Freight Co. — HR Dashboard</h1><div class="sub">Module 2 Simulation Platform</div></div></div>
+  </div>
+  <div class="login-card">
+    <h2>Welcome</h2>
+    <p class="lead">Select your role to enter the simulation session.</p>
+    <div class="role-tabs">
+      <button class="role-tab active" data-role="student">Student Login</button>
+      <button class="role-tab" data-role="trainer">Trainer Login</button>
+    </div>
+    <div id="studentForm">
+      <div class="form-group"><label>Your Name</label><input type="text" id="studentName" placeholder="Enter your full name" autocomplete="name"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="studentId" placeholder="Enter your email" autocomplete="email"></div>
+      <button class="btn primary" id="studentStartBtn" style="width:100%;margin-top:6px;">Start</button>
+    </div>
+    <div id="trainerForm" style="display:none;">
+      <div class="form-group"><label>Trainer Access Code</label><input type="password" id="trainerCode" name="trainer-access-code" placeholder="Enter access code" autocomplete="new-password" value="" spellcheck="false" data-lpignore="true" data-form-type="other"></div>
+      <button class="btn primary" id="trainerLoginBtn" style="width:100%;margin-top:6px;">Enter Dashboard</button>
+    </div>
+    <div class="error-msg" id="loginError"></div>
+  </div>
+</div>
+
+<div id="waitingView" class="view" hidden aria-hidden="true">
+  <div class="app">
+    <div class="ribbon"><div class="brand"><span class="mark">LP</span><div><h1>Gulf Freight Co. — HR Dashboard</h1><div class="sub" id="waitingStudentName">Student</div></div></div></div>
+    <div class="stage waiting-box">
+      <span class="pulse"></span><span style="color:var(--slate);font-size:13px;">Live session</span>
+      <h2>Waiting for the trainer to start the simulation…</h2>
+      <p>You'll enter automatically when the trainer clicks <strong>Start Simulation</strong>. No refresh needed.</p>
+    </div>
+  </div>
+</div>
+
+<div id="simView" class="view" hidden aria-hidden="true">
+  <div class="app">
+    <div class="ribbon"><div class="brand"><span class="mark">LP</span><div><h1>Gulf Freight Co. — HR Dashboard</h1><div class="sub" id="simStudentName">Module 2 Recap Simulation · 4 Topics · 20 Questions</div></div></div></div>
+    <div class="fx-bar"><span class="cell-ref" id="fxRef">START</span><span id="fxLabel">Welcome</span></div>
+    <div class="stage" id="stage"></div>
+  </div>
+</div>
+
+<div id="completeView" class="view" hidden aria-hidden="true">
+  <div class="app" style="max-width:900px;">
+    <div class="ribbon"><div class="brand"><span class="mark">LP</span><div><h1>Simulation Complete</h1><div class="sub" id="completeStudentName">Your Results</div></div></div></div>
+    <div class="stage" id="completeContent"></div>
+  </div>
+</div>
+
+<div id="trainerView" class="view" hidden aria-hidden="true">
+  <div class="ribbon" style="border-radius:10px;">
+    <div class="brand"><span class="mark">LP</span><div><h1>Trainer Dashboard</h1><div class="sub">Gulf Freight Co. — Live Session Control</div></div></div>
+    <span class="badge waiting" id="sessionBadge">Waiting</span>
+  </div>
+  <div class="trainer-header">
+    <div class="trainer-controls">
+      <button class="btn primary" id="startSimBtn">Start Simulation</button>
+      <button class="btn ghost" id="resetSessionBtn">Reset Session</button>
+    </div>
+  </div>
+  <div class="trainer-tabs">
+    <button class="trainer-tab active" data-tab="monitor">Live Monitoring</button>
+    <button class="trainer-tab" data-tab="leaderboard">Final Leaderboard</button>
+    <button class="trainer-tab" data-tab="analytics">Batch Analytics</button>
+    <button class="trainer-tab" data-tab="reference">Trainer Reference</button>
+  </div>
+  <div id="tab-monitor" class="tab-content active">
+    <div class="panel"><h3>Live Participant Monitoring</h3><div id="liveTable"></div></div>
+  </div>
+  <div id="tab-leaderboard" class="tab-content">
+    <div class="panel"><h3>Session Leaderboard</h3><div id="trainerLeaderboard"></div></div>
+  </div>
+  <div id="tab-analytics" class="tab-content">
+    <div class="panel"><h3>Facilitator Report</h3><div id="trainerAnalytics"><p class="round-brief">Analytics will appear when all participants complete the simulation.</p></div></div>
+  </div>
+  <div id="tab-reference" class="tab-content">
+    <div class="panel"><h3>Trainer Reference</h3><div id="trainerReference" class="ref-panel"></div></div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/simulation-engine.js"></script>
+<script src="/js/platform.js"></script>
+</body>
+</html>

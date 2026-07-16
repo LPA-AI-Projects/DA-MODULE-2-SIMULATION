@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><body>
+<p><strong>LEARNERS POINT ACADEMY</strong><br>Trainer Reference Guide<br>Gulf Freight Co. — HR Dashboard Simulation<br>Module 2 Recap · Excel for HR · Answer Key &amp; Facilitation Notes</p>
+
+<h4>1. Simulation Overview</h4>
+<p>This simulation is a four-topic recap of Module 2 with <strong>5 questions per topic (20 total)</strong>. Learners work through realistic Gulf Freight Co. HR data scenarios. This guide provides facilitation notes, answer keys, and debrief guidance.</p>
+
+<p><strong>Scenario given to learners:</strong> Gulf Freight Co. needs an HR dashboard that tracks headcount, turnover, and Emiratisation across four departments — and automatically flags departments that need attention.</p>
+
+<p><strong>Benchmarks used throughout:</strong></p>
+<ul>
+<li>Turnover flag threshold: above 5%</li>
+<li>Emiratisation flag threshold: below 20%</li>
+<li>Flag rule (combined): flag if turnover &gt; 5% OR Emiratisation &lt; 20%</li>
+</ul>
+
+<p><strong>Scoring logic (unchanged in live simulation):</strong></p>
+<ul>
+<li>20 questions × 1 point max each = 20 points maximum</li>
+<li>Correct on first attempt → 1 point</li>
+<li>Correct on second attempt → 0.5 points</li>
+<li>Two wrong attempts → 0 points, correct answer revealed</li>
+<li>LMS score = (total points ÷ 20) × 100, rounded</li>
+</ul>
+
+<h4>2. Topic 1 — Data Cleaning (Q1–Q5)</h4>
+<p><strong>Q1 "Clean Before You Build"</strong> — Correct: Customer Service row (Headcount "Three Hundred Ten" stored as text).</p>
+<p><strong>Q2 "Spot the Duplicate"</strong> — Correct: Second Operations row (exact duplicate of row above).</p>
+<p><strong>Q3 "Validate the Entry"</strong> — Correct: "Ops" row (not in approved dropdown list).</p>
+<p><strong>Q4 "Number or Text?"</strong> — Correct: Operations Headcount (left-aligned = text).</p>
+<p><strong>Q5 "Fill Before You Flag"</strong> — Correct: Operations Emiratisation blank (—).</p>
+
+<h4>3. Topic 2 — XLOOKUP &amp; Advanced Lookups (Q6–Q10)</h4>
+<p><strong>Q6 "Find the Right Data"</strong> — Correct: B — typo "Warehose" in lookup table.</p>
+<p><strong>Q7 "The Invisible Space"</strong> — Correct: B — trailing space after "Warehouse".</p>
+<p><strong>Q8 "Right Match, Wrong Answer"</strong> — Correct: B — return range points at Headcount not Emiratisation.</p>
+<p><strong>Q9 "Does Case Matter?"</strong> — Correct: B — XLOOKUP ignores capitalisation by default.</p>
+<p><strong>Q10 "Read the INDEX-MATCH"</strong> — Correct: B — 9.1% (Turnover column).</p>
+
+<h4>4. Topic 3 — PivotTables &amp; Conditional Formatting (Q11–Q15)</h4>
+<p><strong>Q11 "Read the Summary"</strong> — Correct: Finance cell (incorrectly highlighted).</p>
+<p><strong>Q12 "Which Department Stands Out?"</strong> — Correct: B — Customer Service (9.1% highest turnover).</p>
+<p><strong>Q13 "A Stricter Rule"</strong> — Correct: Warehouse (AND rule: turnover &gt;5% AND Emiratisation &lt;20%).</p>
+<p><strong>Q14 "Build the Field Correctly"</strong> — Correct: B — Average aggregation.</p>
+<p><strong>Q15 "Something's Not Right"</strong> — Correct: Customer Service "4" (Count not Average).</p>
+
+<h4>5. Topic 4 — IF Logic &amp; Nested Formulas (Q16–Q20)</h4>
+<p><strong>Q16 "Write the Flag Rule"</strong> — Correct: B — =IF(OR(C2&gt;5%,D2&lt;20%),"FLAG","OK")</p>
+<p><strong>Q17 "Predict the Output"</strong> — Correct: A — FLAG (Emiratisation 18% &lt; 20%).</p>
+<p><strong>Q18 "Read the Nested Formula"</strong> — Correct: B — FLAG for Warehouse.</p>
+<p><strong>Q19 "Spot the Logic Bug"</strong> — Correct: A — C2&gt;0% always true, nested logic never runs.</p>
+<p><strong>Q20 "The Boundary Case"</strong> — Correct: B — &gt; excludes exactly 5.0%.</p>
+
+<h4>6. Quick Answer Key</h4>
+<table class="grid" style="width:100%;border-collapse:collapse;font-size:12px;">
+<tr><th style="border:1px solid #D8DCE4;padding:6px;">Q#</th><th style="border:1px solid #D8DCE4;padding:6px;">Topic</th><th style="border:1px solid #D8DCE4;padding:6px;">Correct Answer</th></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">1</td><td style="border:1px solid #D8DCE4;padding:6px;">Data Cleaning</td><td style="border:1px solid #D8DCE4;padding:6px;">Customer Service — text headcount</td></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">2</td><td style="border:1px solid #D8DCE4;padding:6px;">Data Cleaning</td><td style="border:1px solid #D8DCE4;padding:6px;">Duplicate Operations row</td></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">3</td><td style="border:1px solid #D8DCE4;padding:6px;">Data Cleaning</td><td style="border:1px solid #D8DCE4;padding:6px;">"Ops" invalid department</td></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">4</td><td style="border:1px solid #D8DCE4;padding:6px;">Data Cleaning</td><td style="border:1px solid #D8DCE4;padding:6px;">Operations headcount as text</td></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">5</td><td style="border:1px solid #D8DCE4;padding:6px;">Data Cleaning</td><td style="border:1px solid #D8DCE4;padding:6px;">Operations blank Emiratisation</td></tr>
+<tr><td style="border:1px solid #D8DCE4;padding:6px;">6–20</td><td style="border:1px solid #D8DCE4;padding:6px;" colspan="2">See topic sections above for full detail</td></tr>
+</table>
+
+<h4>7. Facilitation Tips</h4>
+<ul>
+<li><strong>Data Cleaning:</strong> Distinguish "untidy" from "functionally broken" — only text-as-numbers and blanks break formulas silently.</li>
+<li><strong>XLOOKUP:</strong> #N/A means no exact match — check spelling, spaces, and column references.</li>
+<li><strong>PivotTables:</strong> Train learners to audit conditional formatting against the stated rule cell by cell.</li>
+<li><strong>IF Logic:</strong> Say the rule aloud with "OR" before writing formula — most common mistake is using AND.</li>
+</ul>
+
+<h4>8. LMS Integration</h4>
+<p>On completion, the simulation posts: <code>window.parent.postMessage({ type: "QUIZ_COMPLETED", score }, "*")</code></p>
+<p>Score is 0–100 based on points earned out of 20.</p>
+
+<p style="margin-top:20px;font-size:12px;color:#5B6B82;"><em>Source: Gulf Freight HR Dashboard Trainer Reference (Learners Point Academy). Extended for 20-question live simulation.</em></p>
+</body></html>

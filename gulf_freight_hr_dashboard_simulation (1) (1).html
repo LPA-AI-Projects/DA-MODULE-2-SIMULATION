@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gulf Freight Co. — HR Dashboard Simulation</title>
+<style>
+  :root{
+    --navy:#1A2B4A;
+    --navy-light:#23385f;
+    --teal:#0E9E8E;
+    --teal-light:#E5F5F3;
+    --orange:#F2541D;
+    --orange-light:#FDEAE3;
+    --paper:#F7F5F0;
+    --ink:#1A2B4A;
+    --slate:#5B6B82;
+    --white:#FFFFFF;
+    --grid-line:#D8DCE4;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:Calibri, "Segoe UI", Arial, sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 16px 60px;
+  }
+  .app{width:100%; max-width:780px;}
+  .ribbon{
+    background:var(--navy); color:var(--white);
+    border-radius:10px 10px 0 0; padding:16px 22px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .ribbon .brand{display:flex; align-items:baseline; gap:10px;}
+  .ribbon .brand .mark{
+    font-family:Consolas,"Courier New",monospace; font-weight:700; font-size:13px;
+    letter-spacing:.08em; background:var(--teal); color:var(--navy); padding:3px 7px; border-radius:4px;
+  }
+  .ribbon h1{font-size:17px; margin:0; font-weight:700;}
+  .ribbon .sub{font-size:12px; color:#B9C4D6; margin-top:2px;}
+  .fx-bar{
+    background:var(--navy-light); color:#C9D3E4; font-family:Consolas,"Courier New",monospace;
+    font-size:12px; padding:7px 22px; border-bottom:1px solid #33456b;
+    display:flex; align-items:center; gap:8px;
+  }
+  .fx-bar .cell-ref{background:#0f1c33; color:var(--teal); padding:2px 8px; border-radius:3px; font-weight:700;}
+  .stage{
+    background:var(--white); border:1px solid var(--grid-line); border-top:none;
+    border-radius:0 0 10px 10px; padding:26px 26px 22px; min-height:440px;
+  }
+
+  /* Topic-level tracker */
+  .tracker{display:flex; gap:6px; margin-bottom:10px;}
+  .tracker .seg{flex:1; height:6px; border-radius:3px; background:var(--grid-line); position:relative; overflow:hidden;}
+  .tracker .seg.done{background:var(--teal);}
+  .tracker .seg.active-fill{background:var(--grid-line);}
+  .tracker .seg.active-fill .fill{position:absolute; left:0; top:0; bottom:0; background:var(--orange); border-radius:3px; transition:width .25s ease;}
+
+  /* Dot progress within topic */
+  .dots{display:flex; gap:7px; margin-bottom:18px;}
+  .dots .dot{width:9px; height:9px; border-radius:50%; background:var(--grid-line);}
+  .dots .dot.done{background:var(--teal);}
+  .dots .dot.current{background:var(--orange);}
+
+  .eyebrow{
+    font-family:Consolas,"Courier New",monospace; font-size:11.5px; color:var(--teal);
+    font-weight:700; letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px;
+  }
+  h2.round-title{font-size:21px; margin:0 0 4px; color:var(--navy);}
+  p.round-brief{color:var(--slate); font-size:14.5px; line-height:1.55; margin:0 0 16px; max-width:64ch;}
+
+  table.grid{width:100%; border-collapse:collapse; font-family:Consolas,"Courier New",monospace; font-size:13.5px; margin-bottom:10px;}
+  table.grid th{background:#EEF1F6; color:var(--slate); font-weight:700; text-align:left; padding:8px 10px; border:1px solid var(--grid-line); font-size:12px;}
+  table.grid td{padding:9px 10px; border:1px solid var(--grid-line); color:var(--ink);}
+  table.grid td.num{text-align:right;}
+  table.grid td.txt-left{text-align:left;}
+  table.grid tr.tappable-row{cursor:pointer; transition:background .12s ease;}
+  table.grid tr.tappable-row:hover{background:var(--teal-light);}
+  table.grid tr.row-selected{background:var(--orange-light) !important; outline:2px solid var(--orange); outline-offset:-2px;}
+  td.tap-cell{cursor:pointer;}
+  td.tap-cell:hover{outline:2px solid var(--teal); outline-offset:-2px;}
+  td.tap-cell.pre-flag{background:var(--orange-light); font-weight:700; color:var(--orange);}
+  td.tap-cell.cell-selected{background:var(--orange) !important; color:var(--white) !important; outline:2px solid var(--navy); outline-offset:-2px;}
+  .blank-cell{color:#B9C0CC; font-style:italic;}
+
+  .note-strip{
+    background:var(--teal-light); border-left:3px solid var(--teal); padding:9px 12px;
+    font-size:12.5px; color:var(--navy); border-radius:0 6px 6px 0; margin:6px 0 18px;
+  }
+  .fact-strip{
+    background:#F2F4F7; border-left:3px solid var(--navy); padding:9px 12px;
+    font-size:13px; color:var(--navy); border-radius:0 6px 6px 0; margin:6px 0 16px; font-family:Consolas,monospace;
+  }
+  .formula-strip{
+    background:var(--teal-light); border-left:3px solid var(--teal); padding:10px 14px;
+    font-family:Consolas,"Courier New",monospace; font-size:13px; color:var(--navy);
+    border-radius:0 6px 6px 0; margin:6px 0 16px;
+  }
+
+  .options{display:flex; flex-direction:column; gap:9px; margin-top:4px;}
+  .opt{display:flex; align-items:center; gap:11px; border:1.5px solid var(--grid-line); border-radius:8px; padding:12px 14px; cursor:pointer; background:var(--white); transition:border-color .12s ease, background .12s ease;}
+  .opt:hover{border-color:var(--teal); background:var(--teal-light);}
+  .opt.selected{border-color:var(--orange); background:var(--orange-light);}
+  .opt .tag{font-family:Consolas,monospace; font-weight:700; font-size:12px; color:var(--white); background:var(--navy); width:22px; height:22px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .opt code{font-family:Consolas,"Courier New",monospace; font-size:12.5px; color:var(--navy);}
+  .opt .plain{font-size:14px; color:var(--ink);}
+
+  .feedback{margin-top:16px; padding:14px 16px; border-radius:8px; font-size:14px; line-height:1.55; display:none;}
+  .feedback.show{display:block;}
+  .feedback.correct{background:var(--teal-light); border-left:4px solid var(--teal); color:var(--navy);}
+  .feedback.wrong{background:var(--orange-light); border-left:4px solid var(--orange); color:var(--navy);}
+  .feedback .fb-head{font-weight:700; margin-bottom:4px;}
+
+  .actions{margin-top:18px; display:flex; justify-content:flex-end; gap:10px;}
+  button.btn{font-family:Calibri,"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:700; padding:11px 22px; border-radius:7px; border:none; cursor:pointer; transition:opacity .12s ease, transform .08s ease;}
+  button.btn:active{transform:scale(.98);}
+  button.btn.primary{background:var(--navy); color:var(--white);}
+  button.btn.primary:hover{background:var(--navy-light);}
+  button.btn.ghost{background:transparent; color:var(--slate); border:1.5px solid var(--grid-line);}
+
+  .intro-scenario{background:var(--navy); color:var(--white); border-radius:10px; padding:22px 24px; margin-bottom:18px;}
+  .intro-scenario h3{margin:0 0 8px; font-size:17px;}
+  .intro-scenario p{margin:0; font-size:14px; line-height:1.6; color:#CBD5E7;}
+  .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0 6px;}
+  .kpi{border:1px solid var(--grid-line); border-radius:8px; padding:12px 10px; text-align:center;}
+  .kpi .n{font-family:Consolas,monospace; font-weight:700; font-size:15px; color:var(--navy);}
+  .kpi .l{font-size:11px; color:var(--slate); margin-top:3px;}
+  ul.topics-list{margin:14px 0 0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:7px;}
+  ul.topics-list li{font-size:13.5px; color:var(--slate); display:flex; gap:9px; align-items:baseline;}
+  ul.topics-list .num{font-family:Consolas,monospace; font-weight:700; color:var(--teal); font-size:12px;}
+
+  .topic-card{background:var(--teal-light); border-radius:10px; padding:22px 24px; margin-bottom:6px;}
+  .topic-card .eyebrow2{font-family:Consolas,monospace; font-size:11.5px; color:var(--teal); font-weight:700; letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px;}
+  .topic-card h2{margin:0 0 8px; font-size:22px; color:var(--navy);}
+  .topic-card p{margin:0; font-size:14px; line-height:1.6; color:var(--navy);}
+
+  .recap-score{text-align:center; padding:14px 0 6px;}
+  .recap-score .big{font-family:Consolas,monospace; font-size:44px; font-weight:700; color:var(--navy); line-height:1;}
+  .recap-score .of{font-size:13px; color:var(--slate); margin-top:4px;}
+  .recap-list{display:flex; flex-direction:column; gap:7px; margin:18px 0 4px;}
+  .recap-list .row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--grid-line); border-radius:7px; padding:9px 13px; font-size:13px;}
+  .recap-list .row .name{color:var(--ink);}
+  .recap-list .row .pts{font-family:Consolas,monospace; font-weight:700; padding:2px 9px; border-radius:12px; font-size:12px;}
+  .pts.full{background:var(--teal-light); color:var(--teal);}
+  .pts.half{background:#FFF3D6; color:#B8860B;}
+  .pts.zero{background:var(--orange-light); color:var(--orange);}
+
+  .results-score{text-align:center; padding:16px 0 6px;}
+  .results-score .big{font-family:Consolas,monospace; font-size:54px; font-weight:700; color:var(--navy); line-height:1;}
+  .results-score .of{font-size:14px; color:var(--slate); margin-top:4px;}
+  .topic-breakdown{display:flex; flex-direction:column; gap:8px; margin-top:20px;}
+  .topic-breakdown .row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--grid-line); border-radius:7px; padding:10px 14px; font-size:13.5px;}
+  .topic-breakdown .row .name{color:var(--ink); font-weight:600;}
+  .topic-breakdown .row .pts{font-family:Consolas,monospace; font-weight:700; color:var(--navy);}
+
+  @media (max-width:520px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    table.grid{font-size:11.5px;}
+    .stage{padding:20px 16px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="ribbon">
+    <div class="brand">
+      <span class="mark">LP</span>
+      <div>
+        <h1>Gulf Freight Co. — HR Dashboard</h1>
+        <div class="sub">Module 2 Recap Simulation · 4 Topics · 20 Questions</div>
+      </div>
+    </div>
+  </div>
+  <div class="fx-bar">
+    <span class="cell-ref" id="fxRef">START</span>
+    <span id="fxLabel">Welcome</span>
+  </div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<script>
+(function(){
+
+  // ============================================================
+  // QUESTION BANK — 4 topics x 5 questions, all built on one
+  // consistent Gulf Freight Co. dataset (Warehouse, Customer
+  // Service, Operations, Finance).
+  // ============================================================
+
+  const topics = [
+    {
+      name: 'Data Cleaning',
+      eyebrow: 'Topic 1',
+      intro: 'Before anything gets built on top of it, raw HR data has to earn its place on the dashboard. These five checks are exactly what you\u2019d do in the first ten minutes with a new export from the system.',
+      questions: [
+        {
+          title: '"Clean Before You Build"',
+          brief: 'A raw HR extract just landed. Tap the row that would break a formula.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount','Turnover'],
+            tapMode: 'row',
+            rows: [
+              { cells:['Warehouse','82','9.10%'], correct:false, note:'Inconsistent formatting, but Excel still reads this as a number \u2014 no formula breaks.' },
+              { cells:['Warehouse','82','9.1'], correct:false, note:'Same duplicate, same story \u2014 untidy, not broken.' },
+              { cells:['Customer Service','Three Hundred Ten','9.1%'], correct:true, note:'Headcount is stored as text, not a number \u2014 XLOOKUP and IF formulas can\u2019t calculate with it.' },
+              { cells:['Finance','45','1.8%'], correct:false, note:'Clean data \u2014 nothing wrong here.' }
+            ]
+          },
+          correctFeedback:'Right \u2014 a number typed as words breaks any formula expecting a value, even though it looks harmless in the cell.',
+          wrongFeedback:'That row is a formatting inconsistency \u2014 annoying, but Excel can still calculate with it. Look for the number typed as words instead of digits.'
+        },
+        {
+          title: '"Spot the Duplicate"',
+          brief: 'This extract was pasted in twice by mistake. Tap the row that duplicates data already counted elsewhere \u2014 left in, it will double-count headcount in a SUM.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount','Turnover'],
+            tapMode: 'row',
+            rows: [
+              { cells:['Warehouse','82','6.5%'], correct:false, note:'Appears once \u2014 no issue.' },
+              { cells:['Customer Service','310','9.1%'], correct:false, note:'Appears once \u2014 no issue.' },
+              { cells:['Operations','140','4.2%'], correct:false, note:'This is the first, legitimate entry for Operations.' },
+              { cells:['Operations','140','4.2%'], correct:true, note:'Identical department, headcount, and turnover as the row above \u2014 this is an exact re-entry. Left in, Operations\u2019 140 headcount gets counted twice.' },
+              { cells:['Finance','45','1.8%'], correct:false, note:'Appears once \u2014 no issue.' }
+            ]
+          },
+          correctFeedback:'Exactly \u2014 an exact duplicate row is different from the Warehouse formatting mismatch you saw earlier. This one is identical in every field, which means it\u2019s the same record entered twice.',
+          wrongFeedback:'Compare every field across rows, not just the department name. One department appears with the exact same headcount and turnover twice \u2014 that\u2019s the duplicate.'
+        },
+        {
+          title: '"Validate the Entry"',
+          brief: 'The Department column has a data validation dropdown restricted to four approved names: Warehouse, Customer Service, Operations, Finance. One row was pasted in and bypassed the dropdown. Tap it.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount','Turnover'],
+            tapMode: 'row',
+            rows: [
+              { cells:['Warehouse','82','6.5%'], correct:false, note:'Matches the approved list exactly.' },
+              { cells:['Customer Service','310','9.1%'], correct:false, note:'Matches the approved list exactly.' },
+              { cells:['Ops','140','4.2%'], correct:true, note:'"Ops" doesn\u2019t match any of the four approved names in the validation list. Pasted in directly, it bypasses the dropdown and creates a fifth, unrecognised category \u2014 PivotTables and lookups won\u2019t find it under "Operations."' },
+              { cells:['Finance','45','1.8%'], correct:false, note:'Matches the approved list exactly.' }
+            ]
+          },
+          correctFeedback:'Correct \u2014 data validation only protects data typed through the dropdown itself. Pasted values slip straight past it, which is exactly how "Ops" ended up on the sheet.',
+          wrongFeedback:'Check every department name against the four approved options: Warehouse, Customer Service, Operations, Finance. One row doesn\u2019t match any of them exactly.'
+        },
+        {
+          title: '"Number or Text?"',
+          brief: 'In Excel, real numbers align right in a cell by default; text aligns left \u2014 even if it displays digits. One of these Headcount values is secretly stored as text. Tap it.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount'],
+            tapMode: 'cell',
+            tapCol: 1,
+            rows: [
+              { cells:['Warehouse','82'], correct:false, align:['left','right'], note:'Right-aligned \u2014 a genuine number.' },
+              { cells:['Customer Service','310'], correct:false, align:['left','right'], note:'Right-aligned \u2014 a genuine number.' },
+              { cells:['Operations','140'], correct:true, align:['left','left'], note:'Left-aligned, even though it shows digits \u2014 this cell was imported with a leading character that forced Excel to store it as text. It will be silently skipped by SUM and AVERAGE.' },
+              { cells:['Finance','45'], correct:false, align:['left','right'], note:'Right-aligned \u2014 a genuine number.' }
+            ]
+          },
+          correctFeedback:'Correct \u2014 alignment is one of the fastest tells in Excel. A number that hugs the left edge of its cell is text wearing a number\u2019s clothing.',
+          wrongFeedback:'Look at how each Headcount value sits in its cell. Real numbers push to the right; this one didn\u2019t.'
+        },
+        {
+          title: '"Fill Before You Flag"',
+          brief: 'One department is missing its Emiratisation figure for this cycle. A blank cell in a comparison formula won\u2019t error \u2014 it will just quietly return the wrong flag. Tap the row that needs a value filled in.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Emiratisation'],
+            tapMode: 'row',
+            rows: [
+              { cells:['Warehouse','22%'], correct:false, note:'Populated \u2014 no issue.' },
+              { cells:['Customer Service','25%'], correct:false, note:'Populated \u2014 no issue.' },
+              { cells:['Operations','\u2014'], correct:true, note:'Blank. In a formula like D2<20%, Excel treats a blank cell as 0, which is technically "below 20%" \u2014 so Operations would be auto-flagged for the wrong reason entirely.', blankCell:true },
+              { cells:['Finance','35%'], correct:false, note:'Populated \u2014 no issue.' }
+            ]
+          },
+          correctFeedback:'Right \u2014 blank cells don\u2019t throw an error in a comparison formula, which is exactly what makes them dangerous. They get treated as zero and can trigger a flag for a reason that has nothing to do with reality.',
+          wrongFeedback:'Look for the row where a value simply hasn\u2019t been entered yet \u2014 that\u2019s the one that needs attention before any flag formula can be trusted.'
+        }
+      ]
+    },
+    {
+      name: 'XLOOKUP & Advanced Lookups',
+      eyebrow: 'Topic 2',
+      intro: 'Once the data is clean, formulas take over the searching. These five checks cover the ways a lookup can fail loudly (#N/A), fail silently (a wrong-but-plausible result), or simply work differently than people assume.',
+      questions: [
+        {
+          title: '"Find the Right Data"',
+          brief: 'An XLOOKUP formula was written to pull the Warehouse Emiratisation target from the lookup table below. The formula returned <strong>#N/A</strong>. Why?',
+          kind: 'options',
+          optsMono: false,
+          context: [
+            { type:'table', table:{ columns:['A \u00b7 Department','B \u00b7 Emiratisation Target'], rows:[
+              { cells:['Warehose','22%'], flagCell:0 },
+              { cells:['Customer Service','25%'] },
+              { cells:['Operations','20%'] },
+              { cells:['Finance','30%'] }
+            ]}},
+            { type:'formula', text:'=XLOOKUP("Warehouse", A2:A5, B2:B5)  \u2192  Result: #N/A' }
+          ],
+          options: [
+            { tag:'A', text:'It\u2019s pulling from the wrong column', correct:false, note:'The column reference (B2:B5) is correct \u2014 it does point at the target column.' },
+            { tag:'B', text:'The department name has a typo in the lookup table', correct:true, note:'The table says "Warehose," not "Warehouse." XLOOKUP needs an exact spelling match, so it can\u2019t find one.' },
+            { tag:'C', text:'XLOOKUP is the wrong function to use here', correct:false, note:'XLOOKUP is the right tool for this job \u2014 the function itself isn\u2019t the problem.' }
+          ],
+          correctFeedback:'Exactly right. XLOOKUP matches text exactly, character for character \u2014 "Warehose" and "Warehouse" are different strings to Excel.',
+          wrongFeedback:'#N/A feels like a column problem, but the column reference is fine here. Look closely at the department name spelling inside the table.'
+        },
+        {
+          title: '"The Invisible Space"',
+          brief: 'This lookup table looks identical to the one you just fixed \u2014 no visible typo anywhere. The same formula still returns <strong>#N/A</strong>. What\u2019s going on?',
+          kind: 'options',
+          context: [
+            { type:'table', table:{ columns:['A \u00b7 Department','B \u00b7 Emiratisation Target'], rows:[
+              { cells:['Warehouse \u00b7','22%'] },
+              { cells:['Customer Service','25%'] },
+              { cells:['Operations','20%'] },
+              { cells:['Finance','30%'] }
+            ]}},
+            { type:'formula', text:'=XLOOKUP("Warehouse", A2:A5, B2:B5)  \u2192  Result: #N/A' }
+          ],
+          options: [
+            { tag:'A', text:'There\u2019s a typo in the lookup table', correct:false, note:'Look again \u2014 the spelling is correct this time. Something else is different.' },
+            { tag:'B', text:'There\u2019s an invisible trailing space after "Warehouse" in the table', correct:true, note:'A trailing space is invisible to the eye but is still a character to Excel. "Warehouse" and "Warehouse " (with a space) are not the same string, so XLOOKUP finds no exact match.' },
+            { tag:'C', text:'The search value in the formula has a spelling mistake', correct:false, note:'The formula\u2019s search term, "Warehouse", is spelled correctly.' }
+          ],
+          correctFeedback:'Correct \u2014 this is one of the most common real-world lookup failures precisely because it\u2019s invisible. A stray space from a copy-paste or a system export is enough to break an exact match.',
+          wrongFeedback:'Check the spelling carefully \u2014 it\u2019s actually correct this time. The problem is something you can\u2019t see just by reading the text.'
+        },
+        {
+          title: '"Right Match, Wrong Answer"',
+          brief: 'This formula didn\u2019t return an error \u2014 it returned <strong>140</strong>, a headcount figure, when it should have returned Operations\u2019 Emiratisation target of 20%. Why?',
+          kind: 'options',
+          context: [
+            { type:'table', table:{ columns:['A \u00b7 Department','B \u00b7 Headcount','C \u00b7 Emiratisation Target'], rows:[
+              { cells:['Warehouse','82','22%'] },
+              { cells:['Customer Service','310','25%'] },
+              { cells:['Operations','140','20%'] },
+              { cells:['Finance','45','30%'] }
+            ]}},
+            { type:'formula', text:'=XLOOKUP("Operations", A2:A5, B2:B5)  \u2192  Result: 140' }
+          ],
+          options: [
+            { tag:'A', text:'"Operations" is misspelled in the lookup table', correct:false, note:'The department name matches perfectly \u2014 that\u2019s exactly why the formula found a match and returned a value without erroring.' },
+            { tag:'B', text:'The return range (B2:B5) points at Headcount, not the Emiratisation Target column', correct:true, note:'The lookup value matched fine \u2014 the mistake is in the third argument. B2:B5 is the Headcount column; it should be C2:C5 to return the Emiratisation Target.' },
+            { tag:'C', text:'XLOOKUP can\u2019t return percentage values', correct:false, note:'XLOOKUP can return any data type, including percentages \u2014 that\u2019s not the limitation here.' }
+          ],
+          correctFeedback:'Correct \u2014 and this is the sneakiest kind of lookup mistake, because there\u2019s no error to alert you. The match succeeded; it just pulled a value from the wrong column entirely.',
+          wrongFeedback:'The match clearly succeeded \u2014 no #N/A. So the department name and search logic are fine. Look instead at which column the formula is actually returning from.'
+        },
+        {
+          title: '"Does Case Matter?"',
+          brief: 'The lookup table stores department names in Title Case (e.g. "Warehouse"). Someone writes <code style="font-family:Consolas,monospace;">=XLOOKUP("warehouse", A2:A5, B2:B5)</code> in all lowercase. What happens?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'It returns #N/A \u2014 XLOOKUP is case-sensitive', correct:false, note:'This is the most common assumption, but it\u2019s incorrect. By default, XLOOKUP treats "warehouse" and "Warehouse" as the same text.' },
+            { tag:'B', text:'It returns the correct value \u2014 XLOOKUP ignores capitalisation by default', correct:true, note:'By default, text matching in Excel (including XLOOKUP) is case-insensitive. "warehouse", "WAREHOUSE", and "Warehouse" are all treated as the same match.' }
+          ],
+          correctFeedback:'Correct \u2014 and this is worth remembering precisely because it cuts against most people\u2019s intuition. Spelling has to match exactly; capitalisation doesn\u2019t.',
+          wrongFeedback:'It\u2019s a reasonable guess, but Excel\u2019s default text matching \u2014 including XLOOKUP \u2014 doesn\u2019t care about capitalisation. Only the spelling has to be exact.'
+        },
+        {
+          title: '"Read the INDEX-MATCH"',
+          brief: 'INDEX-MATCH does the same job as XLOOKUP, with more flexibility. What value will this formula return?',
+          kind: 'options',
+          optsMono: false,
+          context: [
+            { type:'table', table:{ columns:['A \u00b7 Department','B \u00b7 Headcount','C \u00b7 Turnover'], rows:[
+              { cells:['Warehouse','82','6.5%'] },
+              { cells:['Customer Service','310','9.1%'] },
+              { cells:['Operations','140','4.2%'] },
+              { cells:['Finance','45','1.8%'] }
+            ]}},
+            { type:'formula', text:'=INDEX(C2:C5, MATCH("Customer Service", A2:A5, 0))' }
+          ],
+          options: [
+            { tag:'A', text:'310', correct:false, note:'That\u2019s Customer Service\u2019s Headcount (column B) \u2014 but INDEX is pulling from C2:C5, the Turnover column, not B2:B5.' },
+            { tag:'B', text:'9.1%', correct:true, note:'MATCH finds "Customer Service" at position 2 in A2:A5. INDEX then returns the 2nd value from C2:C5 \u2014 Turnover \u2014 which is 9.1%.' },
+            { tag:'C', text:'"Customer Service"', correct:false, note:'That\u2019s the search value itself, not what the formula returns. MATCH only finds the position; INDEX does the returning.' },
+            { tag:'D', text:'#N/A', correct:false, note:'"Customer Service" is spelled correctly and exists in A2:A5, so MATCH succeeds \u2014 no error here.' }
+          ],
+          correctFeedback:'Correct \u2014 MATCH does the finding (it returns a position, not a value), and INDEX does the returning, pulling from whichever column you point it at. Here that\u2019s Turnover.',
+          wrongFeedback:'Break it into two steps: what position does MATCH find "Customer Service" at in A2:A5? Then, what value sits at that position in C2:C5, the range INDEX is reading from?'
+        }
+      ]
+    },
+    {
+      name: 'PivotTables & Conditional Formatting',
+      eyebrow: 'Topic 3',
+      intro: 'Raw and looked-up data eventually has to be summarised and made visually scannable. These five checks test whether you can read a PivotTable critically \u2014 not just glance at it \u2014 and catch when a rule or an aggregation has been set up wrong.',
+      questions: [
+        {
+          title: '"Read the Summary"',
+          brief: 'The conditional formatting rule: highlight a department orange if <strong>Turnover &gt; 5% OR Emiratisation &lt; 20%</strong>. One department below is highlighted that shouldn\u2019t be. Tap it.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount','Avg Turnover','Avg Emiratisation'],
+            tapMode: 'cell',
+            tapCol: 2,
+            rows: [
+              { cells:['Customer Service','310','9.1%','25%'], correct:false, preFlag:true, note:'Turnover 9.1% > 5% \u2014 correctly flagged.' },
+              { cells:['Warehouse','82','6.5%','22%'], correct:false, preFlag:true, note:'Turnover 6.5% > 5% \u2014 correctly flagged.' },
+              { cells:['Operations','140','4.2%','18%'], correct:false, preFlag:true, note:'Emiratisation 18% < 20% \u2014 correctly flagged, even though turnover looks healthy. Remember: it\u2019s an OR rule.' },
+              { cells:['Finance','45','1.8%','35%'], correct:true, preFlag:true, note:'1.8% is not above 5%, and 35% is not below 20% \u2014 Finance meets neither condition and should be clean.' }
+            ]
+          },
+          correctFeedback:'Correct. Finance meets neither condition \u2014 someone applied the rule to the wrong cell here.',
+          wrongFeedback:'Check that department against the rule itself: is its turnover really above 5%, or its Emiratisation really below 20%? One department passes both tests cleanly but is still lit up orange.'
+        },
+        {
+          title: '"Which Department Stands Out?"',
+          brief: 'Read the PivotTable summary below. Which department has the highest average turnover?',
+          kind: 'options',
+          context: [
+            { type:'table', table:{ columns:['Department','Headcount','Avg Turnover','Avg Emiratisation'], rows:[
+              { cells:['Warehouse','82','6.5%','22%'] },
+              { cells:['Customer Service','310','9.1%','25%'] },
+              { cells:['Operations','140','4.2%','18%'] },
+              { cells:['Finance','45','1.8%','35%'] }
+            ]}}
+          ],
+          options: [
+            { tag:'A', text:'Warehouse', correct:false, note:'6.5% \u2014 higher than Operations and Finance, but not the highest overall.' },
+            { tag:'B', text:'Customer Service', correct:true, note:'9.1% is the highest average turnover on the table \u2014 and the department most likely to need HR\u2019s attention first.' },
+            { tag:'C', text:'Operations', correct:false, note:'4.2% \u2014 the second-lowest turnover on the table.' },
+            { tag:'D', text:'Finance', correct:false, note:'1.8% \u2014 the lowest turnover on the table.' }
+          ],
+          correctFeedback:'Correct \u2014 straightforward, but this is exactly the kind of read a manager will ask you for on the fly: "which department, at a glance?"',
+          wrongFeedback:'Scan the Avg Turnover column only and compare all four values \u2014 which one is largest?'
+        },
+        {
+          title: '"A Stricter Rule"',
+          brief: 'A separate, stricter rule flags a department only if <strong>both</strong> conditions are true at once: Turnover &gt; 5% <strong>AND</strong> Emiratisation &lt; 20%. Using this week\u2019s snapshot below, tap the one department that would be highlighted under this AND rule.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Avg Turnover','Avg Emiratisation'],
+            tapMode: 'row',
+            rows: [
+              { cells:['Warehouse','6.8%','19%'], correct:true, note:'6.8% > 5% AND 19% < 20% \u2014 both conditions are true at once, so this is the only department the AND rule would catch.' },
+              { cells:['Customer Service','9.1%','25%'], correct:false, note:'Turnover condition is true, but Emiratisation (25%) is not below 20% \u2014 fails the AND rule, even though it would trigger the OR rule from Round 1.' },
+              { cells:['Operations','4.0%','17%'], correct:false, note:'Emiratisation condition is true, but turnover (4.0%) is not above 5% \u2014 fails the AND rule.' },
+              { cells:['Finance','1.5%','33%'], correct:false, note:'Neither condition is true \u2014 clean under any rule.' }
+            ]
+          },
+          correctFeedback:'Correct \u2014 notice how much narrower an AND rule is than an OR rule. Customer Service and Operations would both be flagged under OR, but only Warehouse qualifies here.',
+          wrongFeedback:'Remember: AND needs both conditions true for the same department. Check each row against both thresholds before deciding.'
+        },
+        {
+          title: '"Build the Field Correctly"',
+          brief: 'You\u2019re setting up the PivotTable\u2019s Values area to show each department\u2019s <strong>average</strong> turnover, not a running total. Which aggregation should the Turnover field use?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'Sum', correct:false, note:'Sum would add every turnover entry together \u2014 useful for totals, meaningless for a percentage rate like turnover.' },
+            { tag:'B', text:'Average', correct:true, note:'Average is what produces a sensible "Avg Turnover" figure per department \u2014 exactly what the dashboard column header promises.' },
+            { tag:'C', text:'Count', correct:false, note:'Count would tell you how many turnover entries exist for a department, not what the turnover rate actually is.' },
+            { tag:'D', text:'Max', correct:false, note:'Max would show only the single highest entry, hiding the overall picture the dashboard needs.' }
+          ],
+          correctFeedback:'Correct \u2014 the aggregation you choose in the Values area is what turns raw rows into the summary figure the dashboard actually displays.',
+          wrongFeedback:'Think about what "Avg Turnover" as a column header is promising the reader \u2014 which aggregation delivers that promise accurately?'
+        },
+        {
+          title: '"Something\u2019s Not Right"',
+          brief: 'One cell in this PivotTable couldn\u2019t possibly be a real turnover percentage. Tap it.',
+          kind: 'table',
+          table: {
+            columns: ['Department','Headcount','Avg Turnover'],
+            tapMode: 'cell',
+            tapCol: 2,
+            rows: [
+              { cells:['Warehouse','82','6.5%'], correct:false, note:'A believable turnover percentage.' },
+              { cells:['Customer Service','310','4'], correct:true, note:'"4" isn\u2019t a percentage at all \u2014 it looks like the Values field was set to Count instead of Average, showing how many turnover entries existed instead of the actual rate.' },
+              { cells:['Operations','140','4.2%'], correct:false, note:'A believable turnover percentage.' },
+              { cells:['Finance','45','1.8%'], correct:false, note:'A believable turnover percentage.' }
+            ]
+          },
+          correctFeedback:'Correct \u2014 this is a real-world PivotTable bug: the Values field aggregation got left on Count from an earlier build instead of being set to Average. A sanity check like this catches it before it reaches a client.',
+          wrongFeedback:'Ask yourself, for each figure: "could this plausibly be a turnover percentage?" One of them clearly can\u2019t be.'
+        }
+      ]
+    },
+    {
+      name: 'IF Logic & Nested Formulas',
+      eyebrow: 'Topic 4',
+      intro: 'This is what actually powers the flag column \u2014 the moment the dashboard stops just displaying numbers and starts telling HR what to act on. These five checks build from a single IF up to nested, tiered logic and the small operator details that decide a real edge case.',
+      questions: [
+        {
+          title: '"Write the Flag Rule"',
+          brief: 'The flag column should mark <strong>FLAG</strong> when turnover is above 5% <em>or</em> Emiratisation is below 20%. Which formula does that correctly?',
+          kind: 'options',
+          optsMono: true,
+          options: [
+            { tag:'A', text:'=IF(AND(C2>5%,D2<20%),"FLAG","OK")', correct:false, note:'AND requires both conditions true at once. Warehouse (both conditions true) would be flagged correctly, but Customer Service (only turnover is off) would not \u2014 which misses the brief.' },
+            { tag:'B', text:'=IF(OR(C2>5%,D2<20%),"FLAG","OK")', correct:true, note:'OR flags a department the moment either condition is true \u2014 exactly what "above 5% OR below 20%" requires.' },
+            { tag:'C', text:'=IF(OR(C2<5%,D2>20%),"FLAG","OK")', correct:false, note:'Uses OR correctly, but the comparison signs are flipped \u2014 this would flag the healthy departments and clear the risky ones.' },
+            { tag:'D', text:'=IF(AND(C2<5%,D2>20%),"FLAG","OK")', correct:false, note:'Both the logic (AND) and the comparison signs are backwards here.' }
+          ],
+          correctFeedback:'Correct. OR flags a department the moment either condition is true \u2014 exactly what the brief requires.',
+          wrongFeedback:'Read the brief again: it says a department is flagged if turnover is high \u2018OR\u2019 Emiratisation is low \u2014 either problem is enough on its own. Which formula matches that logic and those comparison signs?'
+        },
+        {
+          title: '"Predict the Output"',
+          brief: 'Using the correct formula <code style="font-family:Consolas,monospace;">=IF(OR(C2&gt;5%,D2&lt;20%),"FLAG","OK")</code>, what will it display for Operations, where Turnover is 4.2% and Emiratisation is 18%?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'FLAG', correct:true, note:'Turnover (4.2%) is not above 5%, but Emiratisation (18%) is below 20% \u2014 one true condition is enough for OR to return FLAG.' },
+            { tag:'B', text:'OK', correct:false, note:'This would be the result only if neither condition were true \u2014 but Emiratisation is below 20% here, which is enough on its own to trigger FLAG.' },
+            { tag:'C', text:'#VALUE!', correct:false, note:'There\u2019s nothing invalid about these inputs \u2014 the formula will evaluate cleanly to a text result, not an error.' },
+            { tag:'D', text:'URGENT', correct:false, note:'"URGENT" isn\u2019t a possible output of this formula at all \u2014 it only ever returns "FLAG" or "OK".' }
+          ],
+          correctFeedback:'Correct \u2014 Operations is a good test case precisely because its turnover looks fine on its own. It\u2019s the Emiratisation figure that triggers the flag.',
+          wrongFeedback:'Check each condition separately against Operations\u2019 numbers: is turnover above 5%? Is Emiratisation below 20%? Remember OR only needs one to be true.'
+        },
+        {
+          title: '"Read the Nested Formula"',
+          brief: 'The dashboard now uses three tiers: <strong>URGENT</strong> if both conditions are true, <strong>FLAG</strong> if only one is, otherwise <strong>OK</strong>.<br><code style="font-family:Consolas,monospace;font-size:12.5px;">=IF(AND(C2&gt;5%,D2&lt;20%),"URGENT",IF(OR(C2&gt;5%,D2&lt;20%),"FLAG","OK"))</code><br>What will this show for Warehouse, where Turnover is 6.5% and Emiratisation is 22%?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'URGENT', correct:false, note:'URGENT needs both conditions true. Emiratisation is 22%, which is not below 20% \u2014 so the AND check fails and the formula moves on to the nested IF.' },
+            { tag:'B', text:'FLAG', correct:true, note:'The outer AND fails (Emiratisation isn\u2019t below 20%), so the formula falls through to the nested IF(OR(...)). Turnover (6.5%) is above 5%, so OR is true \u2014 result is FLAG.' },
+            { tag:'C', text:'OK', correct:false, note:'OK only appears if both the outer AND and the inner OR are false. Turnover being above 5% makes the inner OR true, so it can\u2019t land on OK.' },
+            { tag:'D', text:'#NAME?', correct:false, note:'The formula is syntactically valid \u2014 there\u2019s no misspelled function name here to cause a #NAME? error.' }
+          ],
+          correctFeedback:'Correct \u2014 nested IFs evaluate top to bottom. The formula checks the strictest condition (URGENT) first, and only drops down to the next check when that one fails.',
+          wrongFeedback:'Work through it in order: does Warehouse satisfy the AND condition for URGENT? If not, move to the nested IF(OR(...)) and check that instead.'
+        },
+        {
+          title: '"Spot the Logic Bug"',
+          brief: 'This nested formula was applied to the whole dashboard, and every single department \u2014 including Customer Service at 9.1% turnover \u2014 shows "OK". <br><code style="font-family:Consolas,monospace;font-size:12.5px;">=IF(C2&gt;0%,"OK",IF(AND(C2&gt;5%,D2&lt;20%),"URGENT","FLAG"))</code><br>What\u2019s wrong with it?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'The first condition (C2>0%) is always true, so the nested URGENT/FLAG logic never runs', correct:true, note:'Every department has a turnover above 0%, so the very first check always passes and the formula exits immediately with "OK" \u2014 the entire nested IF underneath is unreachable, no matter what the real numbers are.' },
+            { tag:'B', text:'AND should be OR in the nested part', correct:false, note:'That distinction genuinely matters for URGENT vs FLAG \u2014 but it\u2019s irrelevant here, because the formula never even reaches the nested IF in the first place.' },
+            { tag:'C', text:'The formula is missing a dollar sign for the cell reference', correct:false, note:'Missing dollar signs affect what happens when a formula is copied across cells \u2014 they don\u2019t affect what a single formula evaluates to.' }
+          ],
+          correctFeedback:'Correct \u2014 this is a genuinely common nested-IF mistake: an overly broad first condition silently "swallows" every case before the real logic gets a chance to run.',
+          wrongFeedback:'Ask which condition the formula checks first, and whether that condition could ever actually be false for real data. If it can\u2019t, nothing after it matters.'
+        },
+        {
+          title: '"The Boundary Case"',
+          brief: 'Customer Service\u2019s turnover is exactly <strong>5.0%</strong> this quarter \u2014 precisely at the threshold. The flag rule uses <code style="font-family:Consolas,monospace;">C2&gt;5%</code>. Will Customer Service be flagged on turnover?',
+          kind: 'options',
+          options: [
+            { tag:'A', text:'Yes \u2014 5.0% meets the threshold, so it will be flagged', correct:false, note:'The operator used is strictly greater-than (>), not greater-than-or-equal (>=). A value exactly equal to the threshold does not satisfy ">".' },
+            { tag:'B', text:'No \u2014 the ">" operator excludes a value that is exactly equal to the threshold', correct:true, note:'C2>5% is only true when turnover is strictly greater than 5%. At exactly 5.0%, the condition evaluates to false \u2014 to include the boundary itself, the formula would need >= instead.' }
+          ],
+          correctFeedback:'Correct \u2014 this is a genuinely useful distinction to carry into any real dashboard build: always check whether a stated threshold is meant to be inclusive or exclusive, and choose > vs >= accordingly.',
+          wrongFeedback:'Look closely at the operator in the formula \u2014 it\u2019s ">", not ">=". Does "greater than" include a value that is exactly equal to it?'
+        }
+      ]
+    }
+  ];
+
+  // ============================================================
+  // STATE / SCREEN MACHINE
+  // ============================================================
+
+  // Build a flat list of screens: intro, then per topic [topicIntro, q0..q4, topicRecap], then results.
+  const screens = [{ type:'intro' }];
+  topics.forEach((t, ti) => {
+    screens.push({ type:'topicIntro', t: ti });
+    t.questions.forEach((q, qi) => screens.push({ type:'question', t: ti, q: qi }));
+    screens.push({ type:'topicRecap', t: ti });
+  });
+  screens.push({ type:'results' });
+
+  let ptr = 0;
+  let attempts = 0;
+  let locked = false;
+  const scores = {}; // key "t-q" -> points
+
+  const stage = document.getElementById('stage');
+  const fxRef = document.getElementById('fxRef');
+  const fxLabel = document.getElementById('fxLabel');
+
+  function totalQuestions(){
+    return topics.reduce((a,t)=>a+t.questions.length,0);
+  }
+  function questionsDoneBefore(ti){
+    let n = 0;
+    for(let i=0;i<ti;i++) n += topics[i].questions.length;
+    return n;
+  }
+
+  function renderTopicTracker(activeTi, activeFrac){
+    let html = '<div class="tracker">';
+    topics.forEach((t,i)=>{
+      if(i < activeTi) html += '<div class="seg done"></div>';
+      else if(i === activeTi){
+        const pct = Math.round((activeFrac||0)*100);
+        html += `<div class="seg active-fill"><div class="fill" style="width:${pct}%"></div></div>`;
+      } else html += '<div class="seg"></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderDots(ti, currentQi, count){
+    let html = '<div class="dots">';
+    for(let i=0;i<count;i++){
+      let cls = 'dot';
+      if(i < currentQi) cls += ' done';
+      else if(i === currentQi) cls += ' current';
+      html += `<div class="${cls}"></div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function go(newPtr){
+    ptr = newPtr;
+    attempts = 0;
+    locked = false;
+    render();
+  }
+
+  function render(){
+    const s = screens[ptr];
+    if(s.type === 'intro') renderIntro();
+    else if(s.type === 'topicIntro') renderTopicIntro(s.t);
+    else if(s.type === 'question') renderQuestion(s.t, s.q);
+    else if(s.type === 'topicRecap') renderTopicRecap(s.t);
+    else if(s.type === 'results') renderResults();
+  }
+
+  // ---------- INTRO ----------
+  function renderIntro(){
+    fxRef.textContent = 'START';
+    fxLabel.textContent = 'Welcome';
+    stage.innerHTML = `
+      <div class="intro-scenario">
+        <h3>The brief</h3>
+        <p>Gulf Freight Co. needs an HR dashboard that tracks headcount, turnover and Emiratisation across four departments \u2014 and automatically flags the ones that need attention. A dashboard that just displays numbers hasn\u2019t done its job. It has to flag what matters.</p>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="n">4</div><div class="l">Departments</div></div>
+        <div class="kpi"><div class="n">4</div><div class="l">Topics</div></div>
+        <div class="kpi"><div class="n">20</div><div class="l">Questions total</div></div>
+        <div class="kpi"><div class="n">5</div><div class="l">Per topic</div></div>
+      </div>
+      <p class="round-brief" style="margin-top:16px;">Every question is built on the same Gulf Freight Co. dataset, and tests one distinct thing from today\u2019s session \u2014 no two questions in a topic repeat the same idea. Get it right first time for full credit, or think again for half credit.</p>
+      <ul class="topics-list">
+        ${topics.map((t,i)=>`<li><span class="num">0${i+1}</span> ${t.name} \u2014 5 questions</li>`).join('')}
+      </ul>
+      <div class="actions">
+        <button class="btn primary" id="startBtn">Start Topic 1</button>
+      </div>
+    `;
+    document.getElementById('startBtn').onclick = ()=> go(1);
+  }
+
+  // ---------- TOPIC INTRO ----------
+  function renderTopicIntro(ti){
+    const t = topics[ti];
+    fxRef.textContent = `T${ti+1}`;
+    fxLabel.textContent = t.name;
+    stage.innerHTML = `
+      ${renderTopicTracker(ti, 0)}
+      <div class="topic-card">
+        <div class="eyebrow2">${t.eyebrow} of 4</div>
+        <h2>${t.name}</h2>
+        <p>${t.intro}</p>
+      </div>
+      <p class="round-brief" style="margin-top:14px;">5 questions ahead in this topic.</p>
+      <div class="actions">
+        <button class="btn primary" id="beginTopicBtn">Begin ${t.name}</button>
+      </div>
+    `;
+    document.getElementById('beginTopicBtn').onclick = ()=> go(ptr+1);
+  }
+
+  // ---------- QUESTION ----------
+  function renderQuestion(ti, qi){
+    const t = topics[ti];
+    const q = t.questions[qi];
+    const doneBefore = questionsDoneBefore(ti);
+    const globalIdx = doneBefore + qi;
+    fxRef.textContent = `Q${globalIdx+1}`;
+    fxLabel.textContent = `${t.name} \u00b7 Question ${qi+1} of ${t.questions.length}`;
+
+    const frac = qi / t.questions.length;
+
+    let body = '';
+
+    if(q.kind === 'table'){
+      body += renderInteractiveTable(q.table, 'main-table');
+      const hint = q.table.tapMode === 'row'
+        ? 'Tap the row that matches the brief above.'
+        : 'Tap the highlighted cell that matches the brief above.';
+      body += `<div class="note-strip">${hint}</div>`;
+    }
+
+    if(q.kind === 'options'){
+      if(q.context){
+        q.context.forEach(block=>{
+          if(block.type === 'table') body += renderStaticTable(block.table);
+          if(block.type === 'formula') body += `<div class="formula-strip">${block.text}</div>`;
+          if(block.type === 'fact') body += `<div class="fact-strip">${block.text}</div>`;
+        });
+      }
+      body += `<div class="options">`;
+      q.options.forEach((o,i)=>{
+        const label = q.optsMono ? `<code>${o.text}</code>` : `<span class="plain">${o.text}</span>`;
+        body += `<div class="opt" data-key="${i}"><span class="tag">${o.tag}</span>${label}</div>`;
+      });
+      body += `</div>`;
+    }
+
+    stage.innerHTML = `
+      ${renderTopicTracker(ti, frac)}
+      ${renderDots(ti, qi, t.questions.length)}
+      <div class="eyebrow">${t.eyebrow} \u00b7 Question ${qi+1} of ${t.questions.length}</div>
+      <h2 class="round-title">${q.title}</h2>
+      <p class="round-brief">${q.brief}</p>
+      ${body}
+      <div class="feedback" id="fb"></div>
+      <div class="actions" id="actions"></div>
+    `;
+
+    attachHandlers(q, ti, qi);
+  }
+
+  function renderStaticTable(table){
+    let html = `<table class="grid"><thead><tr>${table.columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+    table.rows.forEach(row=>{
+      html += '<tr>';
+      row.cells.forEach((c,ci)=>{
+        const flagCls = row.flagCell === ci ? ' class="txt-left"' : '';
+        html += `<td${flagCls}>${c}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function renderInteractiveTable(table, idPrefix){
+    let html = `<table class="grid"><thead><tr>${table.columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+    table.rows.forEach((row,ri)=>{
+      if(table.tapMode === 'row'){
+        html += `<tr class="tappable-row" data-key="${ri}">`;
+        row.cells.forEach((c,ci)=>{
+          const isBlank = row.blankCell && ci === row.cells.length-1;
+          const cls = isBlank ? ' class="blank-cell"' : '';
+          html += `<td${cls}>${c}</td>`;
+        });
+        html += `</tr>`;
+      } else {
+        html += `<tr>`;
+        row.cells.forEach((c,ci)=>{
+          if(ci === table.tapCol){
+            let cls = 'tap-cell';
+            if(row.preFlag) cls += ' pre-flag';
+            html += `<td class="${cls}" data-key="${ri}">${c}</td>`;
+          } else {
+            const alignCls = row.align && row.align[ci] === 'left' ? ' class="txt-left"' : (row.align && row.align[ci]==='right' ? ' class="num"' : '');
+            html += `<td${alignCls}>${c}</td>`;
+          }
+        });
+        html += `</tr>`;
+      }
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function attachHandlers(q, ti, qi){
+    const targets = stage.querySelectorAll('[data-key]');
+    targets.forEach(el=>{
+      el.addEventListener('click', ()=>{
+        if(locked) return;
+        handleAnswer(q, ti, qi, el, targets);
+      });
+    });
+  }
+
+  function getOutcome(q, key){
+    if(q.kind === 'table') return q.table.rows[key];
+    if(q.kind === 'options') return q.options[key];
+  }
+
+  function handleAnswer(q, ti, qi, el, allTargets){
+    const key = el.getAttribute('data-key');
+    const outcome = getOutcome(q, key);
+    attempts++;
+
+    allTargets.forEach(t=>{
+      t.classList.remove('row-selected');
+      t.classList.remove('cell-selected');
+      t.classList.remove('selected');
+    });
+    if(q.kind === 'table'){
+      el.classList.add(q.table.tapMode === 'row' ? 'row-selected' : 'cell-selected');
+    } else {
+      el.classList.add('selected');
+    }
+
+    const fb = document.getElementById('fb');
+    const actions = document.getElementById('actions');
+    const scoreKey = `${ti}-${qi}`;
+
+    if(outcome.correct){
+      locked = true;
+      const pts = attempts===1 ? 1 : 0.5;
+      scores[scoreKey] = pts;
+      fb.className = 'feedback show correct';
+      fb.innerHTML = `<div class="fb-head">Correct \u2014 ${pts===1 ? '+1 point' : '+0.5 point (second attempt)'}</div>${outcome.note}${attempts===1 ? ' ' + q.correctFeedback : ''}`;
+      actions.innerHTML = `<button class="btn primary" id="nextBtn">Continue</button>`;
+      document.getElementById('nextBtn').onclick = ()=> go(ptr+1);
+    } else {
+      if(attempts>=2){
+        locked = true;
+        scores[scoreKey] = 0;
+        fb.className = 'feedback show wrong';
+        fb.innerHTML = `<div class="fb-head">Not this time \u2014 0 points</div>${outcome.note}`;
+        actions.innerHTML = `<button class="btn primary" id="nextBtn">Continue</button>`;
+        document.getElementById('nextBtn').onclick = ()=> go(ptr+1);
+      } else {
+        fb.className = 'feedback show wrong';
+        fb.innerHTML = `<div class="fb-head">Not quite \u2014 try once more</div>${outcome.note}`;
+        actions.innerHTML = '';
+      }
+    }
+  }
+
+  // ---------- TOPIC RECAP ----------
+  function renderTopicRecap(ti){
+    const t = topics[ti];
+    fxRef.textContent = `T${ti+1}`;
+    fxLabel.textContent = `${t.name} complete`;
+    let total = 0;
+    let rowsHtml = '';
+    t.questions.forEach((q,qi)=>{
+      const pts = scores[`${ti}-${qi}`] || 0;
+      total += pts;
+      const cls = pts===1 ? 'full' : pts===0.5 ? 'half' : 'zero';
+      const label = pts===1 ? '1.0 pt' : pts===0.5 ? '0.5 pt' : '0 pt';
+      rowsHtml += `<div class="row"><span class="name">Q${qi+1} \u00b7 ${q.title.replace(/"/g,'')}</span><span class="pts ${cls}">${label}</span></div>`;
+    });
+    const isLast = ti === topics.length-1;
+
+    stage.innerHTML = `
+      ${renderTopicTracker(ti+1, 0)}
+      <div class="eyebrow">${t.eyebrow} complete</div>
+      <h2 class="round-title">${t.name} \u2014 recap</h2>
+      <div class="recap-score">
+        <div class="big">${total} / ${t.questions.length}</div>
+        <div class="of">points earned in this topic</div>
+      </div>
+      <div class="recap-list">${rowsHtml}</div>
+      <div class="actions">
+        <button class="btn primary" id="continueBtn">${isLast ? 'See final results' : 'Continue to Topic ' + (ti+2)}</button>
+      </div>
+    `;
+    document.getElementById('continueBtn').onclick = ()=> go(ptr+1);
+  }
+
+  // ---------- RESULTS ----------
+  function renderResults(){
+    fxRef.textContent = 'RESULT';
+    fxLabel.textContent = 'Simulation complete';
+    const totalQ = totalQuestions();
+    let grand = 0;
+    let topicRowsHtml = '';
+    topics.forEach((t,ti)=>{
+      let subtotal = 0;
+      t.questions.forEach((q,qi)=> subtotal += (scores[`${ti}-${qi}`] || 0));
+      grand += subtotal;
+      topicRowsHtml += `<div class="row"><span class="name">${t.eyebrow} \u00b7 ${t.name}</span><span class="pts">${subtotal} / ${t.questions.length}</span></div>`;
+    });
+    const pct = Math.round((grand/totalQ)*100);
+
+    stage.innerHTML = `
+      ${renderTopicTracker(topics.length, 0)}
+      <div class="eyebrow">Simulation complete</div>
+      <h2 class="round-title">Gulf Freight Co. \u2014 Module 2 Recap</h2>
+      <div class="results-score">
+        <div class="big">${pct}</div>
+        <div class="of">LMS score &middot; ${grand} / ${totalQ} points</div>
+      </div>
+      <div class="topic-breakdown">${topicRowsHtml}</div>
+      <div class="actions">
+        <button class="btn ghost" id="restartBtn">Restart simulation</button>
+      </div>
+    `;
+    document.getElementById('restartBtn').onclick = ()=>{
+      Object.keys(scores).forEach(k=>delete scores[k]);
+      go(0);
+    };
+
+    sendScoreToLMS(pct);
+  }
+
+  function sendScoreToLMS(score){
+    try{
+      const target = (window.parent && window.parent !== window) ? window.parent : window;
+      target.postMessage(
+        {
+          type: "QUIZ_COMPLETED",
+          score: score
+        },
+        "*" // keep wildcard for now
+      );
+    }catch(err){
+      console.warn('Could not post score to LMS host:', err);
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
