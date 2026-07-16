@@ -350,6 +350,7 @@ module.exports = {
   connect,
   createRedisClient,
   getRedisUrl,
+  getClientOptions,
   getRedisDiagnostics,
   isRedisConnected,
   getMeta,
