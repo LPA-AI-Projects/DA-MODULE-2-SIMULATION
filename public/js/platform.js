@@ -260,6 +260,13 @@
   });
 
   socket.on('session:reset', () => {
+    // Trainer stays on dashboard — only wipe student sessions to login
+    if (role === 'trainer') {
+      sessionData = { status: 'waiting', participants: [], leaderboard: [], analytics: null, startedAt: null };
+      renderTrainerDashboard(sessionData);
+      return;
+    }
+
     role = null;
     participantId = null;
     simStarted = false;
@@ -270,6 +277,14 @@
     document.getElementById('studentName').value = '';
     document.getElementById('studentId').value = '';
     document.getElementById('trainerCode').value = '';
+  });
+
+  socket.on('session:cleared', (session) => {
+    if (role !== 'trainer') return;
+    sessionData = session || { status: 'waiting', participants: [], leaderboard: [], analytics: null };
+    simStarted = false;
+    lastCompleteData = null;
+    renderTrainerDashboard(sessionData);
   });
 
   socket.on('error', ({ message }) => showError(message));

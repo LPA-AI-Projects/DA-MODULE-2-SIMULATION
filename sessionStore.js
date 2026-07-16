@@ -335,7 +335,13 @@ async function resetSession() {
     return;
   }
 
-  await redisClient.del(META_KEY, PARTICIPANTS_KEY);
+  // Delete keys separately — guarantees participants hash is wiped
+  await redisClient.del(META_KEY);
+  await redisClient.del(PARTICIPANTS_KEY);
+  // Extra safety: if any fields remain, wipe the hash
+  try {
+    await redisClient.unlink(PARTICIPANTS_KEY);
+  } catch (_) { /* ignore */ }
 }
 
 async function prepareForNewStudents() {

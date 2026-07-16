@@ -409,8 +409,15 @@ io.on('connection', (socket) => {
       await sessionStore.resetSession();
       await sessionStore.setMeta({ status: 'waiting', startedAt: null });
       socketToParticipant.clear();
+
+      const emptySnapshot = await getSessionSnapshot();
+
+      // Clear trainer dashboards first, then kick students to login
+      io.to('trainers').emit('session:cleared', emptySnapshot);
+      io.emit('session:update', emptySnapshot);
+      io.to('students').emit('session:reset');
+      // Fallback for any client not in a room
       io.emit('session:reset');
-      await broadcastSession();
     } catch (err) {
       console.error('trainer:reset error:', err);
     }
