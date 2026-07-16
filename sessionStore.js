@@ -7,6 +7,7 @@ const DEFAULT_META = { status: 'waiting', startedAt: null };
 let redisClient = null;
 let usingRedis = false;
 let resolvedRedisUrl = null;
+let lastRedisError = null;
 
 const memoryMeta = { ...DEFAULT_META };
 const memoryParticipants = new Map();
@@ -18,9 +19,11 @@ function participantForStorage(participant) {
 
 function looksLikeValidRedisUrl(url) {
   if (!url || typeof url !== 'string') return false;
-  if (url.includes('undefined') || url.includes('null')) return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.includes('undefined') || trimmed.includes('null')) return false;
+  if (trimmed === 'redis://:@' || trimmed.startsWith('redis://:@')) return false;
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(trimmed);
     if (!['redis:', 'rediss:'].includes(parsed.protocol)) return false;
     if (!parsed.hostname) return false;
     return true;
@@ -29,29 +32,38 @@ function looksLikeValidRedisUrl(url) {
   }
 }
 
+function redactUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.password) u.password = '***';
+    return u.toString();
+  } catch {
+    return '(invalid)';
+  }
+}
+
 /**
  * Resolve Redis URL from Railway / common env vars.
- * Prefers a full REDIS_URL; falls back to host/port/password parts.
  */
 function resolveRedisUrl() {
   const candidates = [
     process.env.REDIS_URL,
     process.env.REDIS_PRIVATE_URL,
-    process.env.REDIS_PUBLIC_URL
+    process.env.REDIS_PUBLIC_URL,
+    process.env.REDISCONNECTIONSTRING
   ].filter(Boolean);
 
   for (const candidate of candidates) {
     if (looksLikeValidRedisUrl(candidate)) return candidate.trim();
   }
 
-  const host = process.env.REDISHOST || process.env.REDIS_HOST;
-  const port = process.env.REDISPORT || process.env.REDIS_PORT || '6379';
+  const host = process.env.REDISHOST || process.env.REDIS_HOST || process.env.RAILWAY_TCP_PROXY_DOMAIN;
+  const port = process.env.REDISPORT || process.env.REDIS_PORT || process.env.RAILWAY_TCP_PROXY_PORT || '6379';
   const password = process.env.REDISPASSWORD || process.env.REDIS_PASSWORD;
-  const user = process.env.REDISUSER || process.env.REDIS_USER || '';
+  const user = process.env.REDISUSER || process.env.REDIS_USER || 'default';
 
   if (host && password && !String(password).includes('undefined')) {
-    const auth = user ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}` : `:${encodeURIComponent(password)}`;
-    const built = `redis://${auth}@${host}:${port}`;
+    const built = `redis://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}`;
     if (looksLikeValidRedisUrl(built)) return built;
   }
 
@@ -67,6 +79,29 @@ function getRedisUrl() {
   return resolvedRedisUrl;
 }
 
+function getRedisDiagnostics() {
+  const raw = process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || '';
+  return {
+    configured: Boolean(resolveRedisUrl() || looksLikeValidRedisUrl(raw)),
+    connected: isRedisConnected(),
+    urlPreview: resolvedRedisUrl ? redactUrl(resolvedRedisUrl) : null,
+    envPresent: Boolean(process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISHOST || process.env.REDIS_HOST),
+    lastError: lastRedisError
+  };
+}
+
+function createRedisClient(url) {
+  const { createClient } = require('redis');
+  // family: 0 fixes common Railway IPv6 / dual-stack connection failures
+  return createClient({
+    url,
+    socket: {
+      family: 0,
+      reconnectStrategy: (retries) => Math.min(retries * 100, 3000)
+    }
+  });
+}
+
 async function touchTTL() {
   if (!usingRedis) return;
   await redisClient.expire(META_KEY, SESSION_TTL_SECONDS);
@@ -74,26 +109,39 @@ async function touchTTL() {
 }
 
 async function connect() {
+  lastRedisError = null;
   const url = resolveRedisUrl();
+
   if (!url) {
-    console.warn('No valid Redis URL found — using in-memory session store (data lost on restart).');
-    console.warn('Set REDIS_URL to the full URL from Railway Redis (Variables → REDIS_URL).');
+    lastRedisError = 'No valid REDIS_URL (or host/password) found in environment';
+    console.warn(lastRedisError);
+    console.warn('In Railway web service set: REDIS_URL=${{Redis.REDIS_URL}}');
+    console.warn('Env check — REDIS_URL set:', Boolean(process.env.REDIS_URL),
+      '| REDISHOST set:', Boolean(process.env.REDISHOST || process.env.REDIS_HOST));
     return false;
   }
 
   try {
-    const { createClient } = require('redis');
-    redisClient = createClient({ url });
-    redisClient.on('error', (err) => console.error('Redis error:', err.message));
+    redisClient = createRedisClient(url);
+    redisClient.on('error', (err) => {
+      console.error('Redis error:', err.message);
+      lastRedisError = err.message;
+    });
     await redisClient.connect();
+    await redisClient.ping();
     usingRedis = true;
     resolvedRedisUrl = url;
-    console.log('Connected to Redis session store.');
+    console.log('Connected to Redis session store:', redactUrl(url));
     return true;
   } catch (err) {
+    lastRedisError = err.message;
     console.error('Redis connection failed — falling back to in-memory store:', err.message);
+    console.error('Attempted URL:', redactUrl(url));
     usingRedis = false;
     resolvedRedisUrl = null;
+    try {
+      if (redisClient) await redisClient.quit().catch(() => {});
+    } catch (_) { /* ignore */ }
     redisClient = null;
     return false;
   }
@@ -200,7 +248,9 @@ async function prepareForNewStudents() {
 
 module.exports = {
   connect,
+  createRedisClient,
   getRedisUrl,
+  getRedisDiagnostics,
   isRedisConnected,
   getMeta,
   setMeta,

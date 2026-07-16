@@ -1,9 +1,13 @@
 (function () {
+  const SESSION_KEY = 'gulfFreightSimSession';
   const socket = io();
   let role = null;
   let participantId = null;
   let studentName = '';
   let sessionData = null;
+  let lastCompleteData = null;
+  let simStarted = false;
+  let restoring = false;
 
   const views = {
     login: document.getElementById('loginView'),
@@ -23,7 +27,33 @@
     document.body.className = 'platform-' + name;
   }
 
-  // Ensure only login is visible on initial load
+  function saveLocalSession(extra) {
+    try {
+      const payload = Object.assign({
+        role,
+        participantId,
+        studentName,
+        studentId: document.getElementById('studentId').value.trim(),
+        trainerCode: role === 'trainer' ? document.getElementById('trainerCode').value.trim() : undefined,
+        lastCompleteData: lastCompleteData || undefined
+      }, extra || {});
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (_) { /* ignore quota */ }
+  }
+
+  function clearLocalSession() {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (_) { /* ignore */ }
+  }
+
+  function loadLocalSession() {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   showView('login');
   document.getElementById('trainerCode').value = '';
 
@@ -53,7 +83,6 @@
     return 'status-progress';
   }
 
-  // Role tabs
   document.querySelectorAll('.role-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
@@ -98,7 +127,6 @@
   });
 
   socket.on('trainer:forceCompleted', ({ message }) => {
-    // Switch trainer to Batch Analytics tab
     document.querySelectorAll('.trainer-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     const analyticsTab = document.querySelector('.trainer-tab[data-tab="analytics"]');
@@ -122,13 +150,63 @@
     sessionData = session;
     document.getElementById('waitingStudentName').textContent = studentName;
     document.getElementById('simStudentName').textContent = studentName + ' · Module 2 Recap';
+    saveLocalSession();
     if (session.status === 'active') startSimulation();
     else showView('waiting');
+  });
+
+  socket.on('student:rejoined', ({ participantId: id, participant, session }) => {
+    restoring = false;
+    role = 'student';
+    participantId = id;
+    sessionData = session;
+    studentName = participant.name || studentName;
+    document.getElementById('waitingStudentName').textContent = studentName;
+    document.getElementById('simStudentName').textContent = studentName + ' · Module 2 Recap';
+    saveLocalSession();
+
+    if (participant.status === 'Completed' && participant.report) {
+      lastCompleteData = {
+        finalScore: participant.finalScore,
+        percentage: participant.percentage,
+        questionsAttempted: participant.questionsAttempted,
+        correctCount: participant.correctCount,
+        incorrectCount: participant.incorrectCount,
+        timeTaken: participant.timeTaken,
+        report: participant.report
+      };
+      saveLocalSession();
+      renderStudentCompletion(session, lastCompleteData);
+      showView('complete');
+      return;
+    }
+
+    if (session.status === 'waiting' || participant.status === 'Waiting') {
+      showView('waiting');
+      return;
+    }
+
+    if (session.status === 'active' || participant.status === 'In Progress' || participant.status === 'Incomplete') {
+      // Resume by restarting the simulation UI for this participant
+      simStarted = false;
+      startSimulation();
+      return;
+    }
+
+    showView('waiting');
+  });
+
+  socket.on('student:rejoinFailed', ({ message }) => {
+    restoring = false;
+    clearLocalSession();
+    showView('login');
+    if (message) showError(message);
   });
 
   socket.on('trainer:joined', ({ session }) => {
     role = 'trainer';
     sessionData = session;
+    saveLocalSession({ trainerCode: document.getElementById('trainerCode').value.trim() });
     showView('trainer');
     renderTrainerDashboard(session);
     loadTrainerReference();
@@ -157,6 +235,7 @@
     participantId = null;
     simStarted = false;
     lastCompleteData = null;
+    clearLocalSession();
     showView('login');
     clearError();
     document.getElementById('studentName').value = '';
@@ -166,19 +245,18 @@
 
   socket.on('error', ({ message }) => showError(message));
 
-  let lastCompleteData = null;
-  let simStarted = false;
-
   function startSimulation() {
     if (simStarted) return;
     simStarted = true;
     showView('sim');
+    saveLocalSession();
     window.SimulationEngine.init({
       onProgress(data) {
         socket.emit('student:progress', data);
       },
       onComplete(data) {
         lastCompleteData = data;
+        saveLocalSession();
         socket.emit('student:complete', data);
         renderStudentCompletion(sessionData, data);
         showView('complete');
@@ -197,8 +275,6 @@
     const report = data.report || { correct: [], incorrect: [], learningSummary: '' };
 
     let html = '';
-
-    // Section A
     html += '<div class="completion-section"><h3>Personal Score Dashboard</h3>';
     html += '<div class="score-grid">';
     html += scoreItem(data.finalScore, 'Final Score');
@@ -211,16 +287,14 @@
     html += scoreItem('Completed', 'Completion Status');
     html += '</div></div>';
 
-    // Section B
     html += '<div class="completion-section"><h3>Session Leaderboard</h3>';
     html += renderLeaderboardTable(lb, participantId);
     html += '</div>';
 
-    // Section C
     html += '<div class="completion-section"><h3>Individual Performance Report</h3>';
     html += '<h4 style="font-size:14px;color:var(--navy);margin:16px 0 8px;">Questions Answered Correctly</h4>';
     html += '<div class="report-list">';
-    if (report.correct.length) {
+    if (report.correct && report.correct.length) {
       report.correct.forEach(r => {
         html += '<div class="report-row"><span class="qnum">Q' + r.questionNumber + '</span><strong>' + r.topic + '</strong> — ' + escapeHtml(r.correct) + '</div>';
       });
@@ -229,7 +303,7 @@
 
     html += '<h4 style="font-size:14px;color:var(--navy);margin:16px 0 8px;">Questions Answered Incorrectly</h4>';
     html += '<div class="report-list">';
-    if (report.incorrect.length) {
+    if (report.incorrect && report.incorrect.length) {
       report.incorrect.forEach(r => {
         html += '<div class="report-row"><span class="qnum">Q' + r.questionNumber + '</span><strong>' + r.topic + '</strong><br>Correct: ' + escapeHtml(r.correctAnswer) + '<br>Your answer: ' + escapeHtml(r.selectedAnswer) + '</div>';
       });
@@ -344,4 +418,37 @@
         document.getElementById('trainerReference').innerHTML = '<p>Trainer reference document could not be loaded. Please ensure trainer-reference.html is available.</p>';
       });
   }
+
+  // Restore session after refresh
+  function tryRestoreSession() {
+    const saved = loadLocalSession();
+    if (!saved || !saved.role) return;
+
+    if (saved.role === 'student' && saved.participantId) {
+      restoring = true;
+      studentName = saved.studentName || '';
+      lastCompleteData = saved.lastCompleteData || null;
+      if (saved.studentId) document.getElementById('studentId').value = saved.studentId;
+      if (saved.studentName) document.getElementById('studentName').value = saved.studentName;
+      socket.emit('student:rejoin', { participantId: saved.participantId });
+      return;
+    }
+
+    if (saved.role === 'trainer' && saved.trainerCode) {
+      document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+      const trainerTab = document.querySelector('.role-tab[data-role="trainer"]');
+      if (trainerTab) trainerTab.classList.add('active');
+      document.getElementById('studentForm').style.display = 'none';
+      document.getElementById('trainerForm').style.display = 'block';
+      document.getElementById('trainerCode').value = saved.trainerCode;
+      socket.emit('trainer:join', { code: saved.trainerCode });
+    }
+  }
+
+  socket.on('connect', () => {
+    if (!role && !restoring) tryRestoreSession();
+  });
+
+  // If already connected when script loads
+  if (socket.connected) tryRestoreSession();
 })();

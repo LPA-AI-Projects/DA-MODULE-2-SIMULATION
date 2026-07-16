@@ -21,9 +21,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', async (_req, res) => {
   try {
     const meta = await sessionStore.getMeta();
+    const redis = sessionStore.getRedisDiagnostics();
     res.json({
       ok: true,
-      redis: sessionStore.isRedisConnected(),
+      redis: redis.connected,
+      redisConfigured: redis.envPresent,
+      redisUrl: redis.urlPreview,
+      redisError: redis.lastError,
       sessionStatus: meta.status
     });
   } catch (err) {
@@ -314,6 +318,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('student:rejoin', async ({ participantId: id }) => {
+    try {
+      if (!id) {
+        socket.emit('student:rejoinFailed', { message: 'Missing participant id.' });
+        return;
+      }
+      const p = await sessionStore.getParticipant(id);
+      if (!p) {
+        socket.emit('student:rejoinFailed', { message: 'Session not found. Please log in again.' });
+        return;
+      }
+
+      // If marked Incomplete by force-complete but they reconnect mid-sim, keep Incomplete unless they finish
+      socket.participantId = id;
+      socket.role = 'student';
+      registerSocket(socket, id);
+      socket.join('students');
+
+      socket.emit('student:rejoined', {
+        participantId: id,
+        participant: participantToJSON(p),
+        session: await getSessionSnapshot()
+      });
+      await broadcastSession();
+    } catch (err) {
+      console.error('student:rejoin error:', err);
+      socket.emit('student:rejoinFailed', { message: 'Could not restore session.' });
+    }
+  });
+
   socket.on('trainer:join', async ({ code }) => {
     try {
       if (String(code) !== TRAINER_CODE) {
@@ -472,15 +506,8 @@ io.on('connection', (socket) => {
     try {
       trainers.delete(socket.id);
       unregisterSocket(socket.id);
-
-      const participantId = socket.participantId;
-      if (!participantId) return;
-
-      const p = await sessionStore.getParticipant(participantId);
-      if (p && p.status !== 'Completed') {
-        await sessionStore.deleteParticipant(participantId);
-        await broadcastSession();
-      }
+      // Keep participant data in Redis/memory so refresh can restore the session.
+      // Cleanup happens only on trainer Reset Session.
     } catch (err) {
       console.error('disconnect error:', err);
     }
@@ -492,10 +519,8 @@ async function setupSocketAdapter() {
   if (!url || !sessionStore.isRedisConnected()) return;
 
   try {
-    const { createClient } = require('redis');
     const { createAdapter } = require('@socket.io/redis-adapter');
-
-    const pubClient = createClient({ url });
+    const pubClient = sessionStore.createRedisClient(url);
     const subClient = pubClient.duplicate();
 
     pubClient.on('error', (err) => console.error('Redis pub error:', err.message));
