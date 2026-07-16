@@ -8,6 +8,8 @@ let redisClient = null;
 let usingRedis = false;
 let resolvedRedisUrl = null;
 let lastRedisError = null;
+let lastResolveNote = null;
+let lastClientOptions = null; // url string or discrete config for adapters
 
 const memoryMeta = { ...DEFAULT_META };
 const memoryParticipants = new Map();
@@ -17,15 +19,29 @@ function participantForStorage(participant) {
   return rest;
 }
 
+function cleanEnv(value) {
+  if (value == null) return '';
+  let s = String(value).trim();
+  // Strip wrapping quotes Railway / copy-paste sometimes adds
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function isBadToken(value) {
+  const s = cleanEnv(value).toLowerCase();
+  return !s || s === 'undefined' || s === 'null' || s.includes('${{') || s.includes('}}');
+}
+
 function looksLikeValidRedisUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  if (!trimmed || trimmed.includes('undefined') || trimmed.includes('null')) return false;
-  if (trimmed === 'redis://:@' || trimmed.startsWith('redis://:@')) return false;
+  if (isBadToken(url)) return false;
+  const trimmed = cleanEnv(url);
+  if (trimmed === 'redis://:@' || /^redis:\/\/:?@?$/.test(trimmed)) return false;
   try {
     const parsed = new URL(trimmed);
     if (!['redis:', 'rediss:'].includes(parsed.protocol)) return false;
-    if (!parsed.hostname) return false;
+    if (!parsed.hostname || isBadToken(parsed.hostname)) return false;
     return true;
   } catch {
     return false;
@@ -38,40 +54,79 @@ function redactUrl(url) {
     if (u.password) u.password = '***';
     return u.toString();
   } catch {
-    return '(invalid)';
+    return '(unparseable)';
   }
 }
 
+function getDiscreteRedisConfig() {
+  const host = cleanEnv(
+    process.env.REDISHOST ||
+    process.env.REDIS_HOST ||
+    process.env.REDIS_PRIVATE_HOST
+  );
+  const port = cleanEnv(
+    process.env.REDISPORT ||
+    process.env.REDIS_PORT ||
+    process.env.REDIS_PRIVATE_PORT ||
+    '6379'
+  ) || '6379';
+  const password = cleanEnv(
+    process.env.REDISPASSWORD ||
+    process.env.REDIS_PASSWORD ||
+    process.env.REDIS_PRIVATE_PASSWORD
+  );
+  const username = cleanEnv(
+    process.env.REDISUSER ||
+    process.env.REDIS_USER ||
+    'default'
+  ) || 'default';
+
+  if (isBadToken(host)) return null;
+  return {
+    host,
+    port: Number(port) || 6379,
+    password: password && !isBadToken(password) ? password : undefined,
+    username: username && !isBadToken(username) ? username : 'default'
+  };
+}
+
 /**
- * Resolve Redis URL from Railway / common env vars.
+ * Resolve Redis connection: prefer valid URL, else build from Railway host vars.
  */
-function resolveRedisUrl() {
-  const candidates = [
+function resolveRedisConnection() {
+  lastResolveNote = null;
+
+  const urlCandidates = [
     process.env.REDIS_URL,
     process.env.REDIS_PRIVATE_URL,
-    process.env.REDIS_PUBLIC_URL,
-    process.env.REDISCONNECTIONSTRING
-  ].filter(Boolean);
+    process.env.REDIS_PUBLIC_URL
+  ];
 
-  for (const candidate of candidates) {
-    if (looksLikeValidRedisUrl(candidate)) return candidate.trim();
+  for (const raw of urlCandidates) {
+    const candidate = cleanEnv(raw);
+    if (!candidate) continue;
+    if (looksLikeValidRedisUrl(candidate)) {
+      lastResolveNote = 'Using REDIS_URL';
+      return { type: 'url', url: candidate };
+    }
+    lastResolveNote = `REDIS_URL present but invalid: ${redactUrl(candidate)} (raw length ${candidate.length})`;
   }
 
-  const host = process.env.REDISHOST || process.env.REDIS_HOST || process.env.RAILWAY_TCP_PROXY_DOMAIN;
-  const port = process.env.REDISPORT || process.env.REDIS_PORT || process.env.RAILWAY_TCP_PROXY_PORT || '6379';
-  const password = process.env.REDISPASSWORD || process.env.REDIS_PASSWORD;
-  const user = process.env.REDISUSER || process.env.REDIS_USER || 'default';
-
-  if (host && password && !String(password).includes('undefined')) {
-    const built = `redis://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}`;
-    if (looksLikeValidRedisUrl(built)) return built;
+  const discrete = getDiscreteRedisConfig();
+  if (discrete) {
+    const auth = discrete.password
+      ? `${encodeURIComponent(discrete.username)}:${encodeURIComponent(discrete.password)}@`
+      : '';
+    const url = `redis://${auth}${discrete.host}:${discrete.port}`;
+    if (looksLikeValidRedisUrl(url)) {
+      lastResolveNote = `Built URL from REDISHOST/REDISPASSWORD (${discrete.host}:${discrete.port})`;
+      return { type: 'url', url, discrete };
+    }
+    lastResolveNote = 'REDISHOST found but could not build a valid URL';
+    return { type: 'discrete', discrete };
   }
 
-  if (host && !password) {
-    const built = `redis://${host}:${port}`;
-    if (looksLikeValidRedisUrl(built)) return built;
-  }
-
+  lastResolveNote = 'No REDIS_URL or REDISHOST/REDISPASSWORD found';
   return null;
 }
 
@@ -80,24 +135,54 @@ function getRedisUrl() {
 }
 
 function getRedisDiagnostics() {
-  const raw = process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || '';
+  const rawUrl = cleanEnv(process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || '');
+  const discrete = getDiscreteRedisConfig();
   return {
-    configured: Boolean(resolveRedisUrl() || looksLikeValidRedisUrl(raw)),
+    configured: Boolean(rawUrl || discrete),
     connected: isRedisConnected(),
     urlPreview: resolvedRedisUrl ? redactUrl(resolvedRedisUrl) : null,
-    envPresent: Boolean(process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISHOST || process.env.REDIS_HOST),
+    envPresent: Boolean(
+      process.env.REDIS_URL ||
+      process.env.REDIS_PRIVATE_URL ||
+      process.env.REDISHOST ||
+      process.env.REDIS_HOST
+    ),
+    envKeys: {
+      REDIS_URL: Boolean(process.env.REDIS_URL),
+      REDIS_PRIVATE_URL: Boolean(process.env.REDIS_PRIVATE_URL),
+      REDISHOST: Boolean(process.env.REDISHOST || process.env.REDIS_HOST),
+      REDISPORT: Boolean(process.env.REDISPORT || process.env.REDIS_PORT),
+      REDISPASSWORD: Boolean(process.env.REDISPASSWORD || process.env.REDIS_PASSWORD),
+      REDISUSER: Boolean(process.env.REDISUSER || process.env.REDIS_USER)
+    },
+    invalidUrlPreview: rawUrl && !looksLikeValidRedisUrl(rawUrl) ? redactUrl(rawUrl) : null,
+    resolveNote: lastResolveNote,
     lastError: lastRedisError
   };
 }
 
-function createRedisClient(url) {
+function createRedisClient(urlOrOptions) {
   const { createClient } = require('redis');
-  // family: 0 fixes common Railway IPv6 / dual-stack connection failures
+  const baseSocket = {
+    family: 0,
+    reconnectStrategy: (retries) => Math.min(retries * 100, 3000)
+  };
+
+  if (typeof urlOrOptions === 'string') {
+    return createClient({
+      url: urlOrOptions,
+      socket: baseSocket
+    });
+  }
+
+  // Discrete Railway vars — more reliable when REDIS_URL is malformed
   return createClient({
-    url,
+    username: urlOrOptions.username,
+    password: urlOrOptions.password,
     socket: {
-      family: 0,
-      reconnectStrategy: (retries) => Math.min(retries * 100, 3000)
+      ...baseSocket,
+      host: urlOrOptions.host,
+      port: urlOrOptions.port
     }
   });
 }
@@ -110,41 +195,56 @@ async function touchTTL() {
 
 async function connect() {
   lastRedisError = null;
-  const url = resolveRedisUrl();
+  const connection = resolveRedisConnection();
 
-  if (!url) {
-    lastRedisError = 'No valid REDIS_URL (or host/password) found in environment';
+  if (!connection) {
+    lastRedisError = lastResolveNote || 'No valid Redis configuration in environment';
     console.warn(lastRedisError);
-    console.warn('In Railway web service set: REDIS_URL=${{Redis.REDIS_URL}}');
-    console.warn('Env check — REDIS_URL set:', Boolean(process.env.REDIS_URL),
-      '| REDISHOST set:', Boolean(process.env.REDISHOST || process.env.REDIS_HOST));
+    console.warn('Set on Railway web service: REDIS_URL=${{Redis.REDIS_URL}}');
+    console.warn('Or share Redis variables: REDISHOST, REDISPORT, REDISPASSWORD, REDISUSER');
     return false;
   }
 
   try {
-    redisClient = createRedisClient(url);
+    if (connection.type === 'url') {
+      redisClient = createRedisClient(connection.url);
+      resolvedRedisUrl = connection.url;
+      lastClientOptions = connection.url;
+    } else {
+      redisClient = createRedisClient(connection.discrete);
+      resolvedRedisUrl = `redis://${connection.discrete.host}:${connection.discrete.port}`;
+      lastClientOptions = connection.discrete;
+    }
+
     redisClient.on('error', (err) => {
       console.error('Redis error:', err.message);
       lastRedisError = err.message;
     });
+
     await redisClient.connect();
     await redisClient.ping();
     usingRedis = true;
-    resolvedRedisUrl = url;
-    console.log('Connected to Redis session store:', redactUrl(url));
+    console.log('Connected to Redis:', resolvedRedisUrl ? redactUrl(resolvedRedisUrl) : '(discrete)');
+    console.log(lastResolveNote);
     return true;
   } catch (err) {
     lastRedisError = err.message;
     console.error('Redis connection failed — falling back to in-memory store:', err.message);
-    console.error('Attempted URL:', redactUrl(url));
+    if (resolvedRedisUrl) console.error('Attempted URL:', redactUrl(resolvedRedisUrl));
+    console.error(lastResolveNote);
     usingRedis = false;
     resolvedRedisUrl = null;
+    lastClientOptions = null;
     try {
       if (redisClient) await redisClient.quit().catch(() => {});
     } catch (_) { /* ignore */ }
     redisClient = null;
     return false;
   }
+}
+
+function getClientOptions() {
+  return lastClientOptions;
 }
 
 function isRedisConnected() {

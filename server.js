@@ -27,6 +27,9 @@ app.get('/health', async (_req, res) => {
       redis: redis.connected,
       redisConfigured: redis.envPresent,
       redisUrl: redis.urlPreview,
+      redisInvalidUrl: redis.invalidUrlPreview,
+      redisEnvKeys: redis.envKeys,
+      redisNote: redis.resolveNote,
       redisError: redis.lastError,
       sessionStatus: meta.status
     });
@@ -515,12 +518,12 @@ io.on('connection', (socket) => {
 });
 
 async function setupSocketAdapter() {
-  const url = sessionStore.getRedisUrl();
-  if (!url || !sessionStore.isRedisConnected()) return;
+  const options = sessionStore.getClientOptions();
+  if (!options || !sessionStore.isRedisConnected()) return;
 
   try {
     const { createAdapter } = require('@socket.io/redis-adapter');
-    const pubClient = sessionStore.createRedisClient(url);
+    const pubClient = sessionStore.createRedisClient(options);
     const subClient = pubClient.duplicate();
 
     pubClient.on('error', (err) => console.error('Redis pub error:', err.message));
