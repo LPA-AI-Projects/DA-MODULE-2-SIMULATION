@@ -339,11 +339,7 @@ async function resetSession() {
 }
 
 async function prepareForNewStudents() {
-  const meta = await getMeta();
-  if (meta.status === 'completed') {
-    await resetSession();
-    await setMeta({ ...DEFAULT_META });
-  }
+  // Do not auto-clear completed sessions — only trainer Reset clears data.
 }
 
 module.exports = {

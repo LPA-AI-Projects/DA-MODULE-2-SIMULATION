@@ -848,12 +848,75 @@ window.SimulationEngine = (function(){
       currentScore: Math.round(currentScore * 10) / 10,
       completionPct: Math.round((attempted / totalQ) * 100),
       correctCount,
-      incorrectCount
+      incorrectCount,
+      finalScore: Math.round(currentScore * 10) / 10,
+      percentage: Math.round((currentScore / totalQ) * 100),
+      report: buildReport(),
+      engineState: {
+        ptr,
+        attempts,
+        locked,
+        scores: Object.assign({}, scores),
+        answerLog: answerLog.slice(),
+        sessionStartTime,
+        optionShuffles: (function () {
+          const map = {};
+          topics.forEach((t, ti) => {
+            t.questions.forEach((q, qi) => {
+              if (q._displayOptions) map[ti + '-' + qi] = q._displayOptions;
+            });
+          });
+          return map;
+        })()
+      }
     });
   }
 
-  function init(h) {
+  function exportProgressSnapshot() {
+    const totalQ = totalQuestions();
+    let currentScore = 0;
+    Object.keys(scores).forEach(k => { currentScore += scores[k]; });
+    let correctCount = 0, incorrectCount = 0;
+    answerLog.forEach(a => { if (a.finalCorrect) correctCount++; else if (a.locked) incorrectCount++; });
+    const timeTaken = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0;
+    return {
+      finalScore: Math.round(currentScore * 10) / 10,
+      percentage: Math.round((currentScore / totalQ) * 100),
+      questionsAttempted: Object.keys(scores).length,
+      correctCount,
+      incorrectCount,
+      timeTaken,
+      report: buildReport()
+    };
+  }
+
+  function init(h, savedState) {
     hooks = h || {};
+    if (savedState && typeof savedState.ptr === 'number') {
+      sessionStartTime = savedState.sessionStartTime || Date.now();
+      ptr = savedState.ptr;
+      attempts = savedState.attempts || 0;
+      locked = !!savedState.locked;
+      Object.keys(scores).forEach(k => delete scores[k]);
+      Object.assign(scores, savedState.scores || {});
+      answerLog.length = 0;
+      (savedState.answerLog || []).forEach(a => answerLog.push(a));
+      clearOptionShuffleCache();
+      if (savedState.optionShuffles) {
+        Object.entries(savedState.optionShuffles).forEach(([key, opts]) => {
+          const parts = key.split('-');
+          const ti = Number(parts[0]);
+          const qi = Number(parts[1]);
+          if (topics[ti] && topics[ti].questions[qi]) {
+            topics[ti].questions[qi]._displayOptions = opts;
+          }
+        });
+      }
+      render();
+      syncProgress();
+      return;
+    }
+
     sessionStartTime = Date.now();
     ptr = 0; attempts = 0; locked = false;
     Object.keys(scores).forEach(k => delete scores[k]);
@@ -863,5 +926,6 @@ window.SimulationEngine = (function(){
     syncProgress('START');
   }
 
-  return { init, topics };
+  return { init, topics, exportProgressSnapshot };
+
 })();

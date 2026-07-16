@@ -55,7 +55,9 @@ function participantToJSON(p) {
     correctCount: p.correctCount,
     incorrectCount: p.incorrectCount,
     completedAt: p.completedAt,
-    report: p.report || null
+    report: p.report || null,
+    forceCompleted: !!p.forceCompleted,
+    engineState: p.engineState || null
   };
 }
 
@@ -280,6 +282,11 @@ io.on('connection', (socket) => {
       await sessionStore.prepareForNewStudents();
       const meta = await sessionStore.getMeta();
 
+      if (meta.status === 'completed') {
+        socket.emit('error', { message: 'Session has ended. Please wait for the trainer to reset.' });
+        return;
+      }
+
       if (meta.status !== 'waiting' && meta.status !== 'active') {
         socket.emit('error', { message: 'Session has ended. Please wait for the trainer to reset.' });
         return;
@@ -342,6 +349,7 @@ io.on('connection', (socket) => {
       socket.emit('student:rejoined', {
         participantId: id,
         participant: participantToJSON(p),
+        engineState: p.engineState || null,
         session: await getSessionSnapshot()
       });
       await broadcastSession();
@@ -372,11 +380,8 @@ io.on('connection', (socket) => {
       if (!trainers.has(socket.id)) return;
 
       const meta = await sessionStore.getMeta();
-      if (meta.status !== 'waiting' && meta.status !== 'completed') return;
-
-      if (meta.status === 'completed') {
-        await sessionStore.resetSession();
-      }
+      // Only start from waiting — completed sessions must be Reset first
+      if (meta.status !== 'waiting') return;
 
       const newMeta = { status: 'active', startedAt: Date.now() };
       await sessionStore.setMeta(newMeta);
@@ -418,29 +423,70 @@ io.on('connection', (socket) => {
       const meta = await sessionStore.getMeta();
       if (meta.status !== 'active') return;
 
+      const TOTAL_Q = 20;
       const participants = await sessionStore.getAllParticipants();
-      let hasAnyCompleted = false;
+      let finishedCount = 0;
 
       for (const [, p] of participants) {
-        if (p.status === 'Completed') {
-          hasAnyCompleted = true;
+        if (p.status === 'Completed' && p.report) {
+          finishedCount++;
           continue;
         }
-        // Mark unfinished participants so the trainer can see who dropped out
-        p.status = 'Incomplete';
-        p.currentQuestion = p.currentQuestion && p.currentQuestion !== '—'
-          ? p.currentQuestion
-          : 'Stopped';
+
+        // Finalize mid-session students with score earned so far
+        const score = Number(p.currentScore) || 0;
+        const attempted = Number(p.questionsAttempted) || 0;
+        const startedAt = p.startedAt || meta.startedAt || Date.now();
+        const timeTaken = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+
+        p.status = 'Completed';
+        p.currentQuestion = 'Finished';
+        p.finalScore = Math.round(score * 10) / 10;
+        p.percentage = Math.round((score / TOTAL_Q) * 100);
+        p.currentScore = p.finalScore;
+        p.completionPct = Math.round((attempted / TOTAL_Q) * 100);
+        p.correctCount = p.correctCount || 0;
+        p.incorrectCount = p.incorrectCount || 0;
+        p.timeTaken = p.timeTaken || timeTaken;
+        p.completedAt = Date.now();
+        p.forceCompleted = true;
+
+        if (!p.report) {
+          const base = p.partialReport || { correct: [], incorrect: [], learningSummary: '' };
+          p.report = {
+            correct: base.correct || [],
+            incorrect: base.incorrect || [],
+            learningSummary: (base.learningSummary || 'Progress saved.') +
+              ' Session was ended early by the trainer; unanswered questions count as 0.'
+          };
+        }
+
         await sessionStore.setParticipant(p);
+        finishedCount++;
       }
 
       await sessionStore.setMeta({ ...meta, status: 'completed' });
+      const snapshot = await broadcastSession();
+
+      // Refresh ranks
+      for (const entry of snapshot.leaderboard) {
+        const part = await sessionStore.getParticipant(entry.id);
+        if (part) {
+          part.rank = entry.rank;
+          await sessionStore.setParticipant(part);
+        }
+      }
       await broadcastSession();
+
+      io.emit('session:forceCompleted', {
+        message: 'The trainer ended the session. Your score so far has been recorded.'
+      });
+
       socket.emit('trainer:forceCompleted', {
-        hasAnalytics: hasAnyCompleted,
-        message: hasAnyCompleted
-          ? 'Session force-completed. Analytics generated from finished participants.'
-          : 'Session force-completed, but no students finished yet — analytics are empty.'
+        hasAnalytics: finishedCount > 0,
+        message: finishedCount
+          ? 'Session force-completed. All participants finalized with scores so far. Analytics are ready.'
+          : 'Session force-completed, but there were no participants.'
       });
     } catch (err) {
       console.error('trainer:forceComplete error:', err);
@@ -453,7 +499,7 @@ io.on('connection', (socket) => {
       if (meta.status !== 'active') return;
 
       const p = socket.participantId ? await sessionStore.getParticipant(socket.participantId) : null;
-      if (!p) return;
+      if (!p || p.status === 'Completed') return;
 
       p.status = data.status || p.status;
       p.currentQuestion = data.currentQuestion ?? p.currentQuestion;
@@ -462,6 +508,10 @@ io.on('connection', (socket) => {
       p.completionPct = data.completionPct ?? p.completionPct;
       p.correctCount = data.correctCount ?? p.correctCount;
       p.incorrectCount = data.incorrectCount ?? p.incorrectCount;
+      if (data.finalScore != null) p.finalScore = data.finalScore;
+      if (data.percentage != null) p.percentage = data.percentage;
+      if (data.report) p.partialReport = data.report;
+      if (data.engineState) p.engineState = data.engineState;
 
       await sessionStore.setParticipant(p);
       await broadcastSession();

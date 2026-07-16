@@ -121,7 +121,7 @@
   });
 
   document.getElementById('forceCompleteBtn').addEventListener('click', () => {
-    if (confirm('Force complete this session?\n\nUnfinished students will be marked Incomplete. Analytics and leaderboard will be generated from students who already finished.')) {
+    if (confirm('Force complete this session?\n\nStudents still in progress will be marked Completed with their score so far. Analytics will include everyone.')) {
       socket.emit('trainer:forceComplete');
     }
   });
@@ -155,7 +155,7 @@
     else showView('waiting');
   });
 
-  socket.on('student:rejoined', ({ participantId: id, participant, session }) => {
+  socket.on('student:rejoined', ({ participantId: id, participant, engineState, session }) => {
     restoring = false;
     role = 'student';
     participantId = id;
@@ -165,7 +165,7 @@
     document.getElementById('simStudentName').textContent = studentName + ' · Module 2 Recap';
     saveLocalSession();
 
-    if (participant.status === 'Completed' && participant.report) {
+    if (participant.status === 'Completed') {
       lastCompleteData = {
         finalScore: participant.finalScore,
         percentage: participant.percentage,
@@ -173,7 +173,7 @@
         correctCount: participant.correctCount,
         incorrectCount: participant.incorrectCount,
         timeTaken: participant.timeTaken,
-        report: participant.report
+        report: participant.report || { correct: [], incorrect: [], learningSummary: '' }
       };
       saveLocalSession();
       renderStudentCompletion(session, lastCompleteData);
@@ -186,10 +186,9 @@
       return;
     }
 
-    if (session.status === 'active' || participant.status === 'In Progress' || participant.status === 'Incomplete') {
-      // Resume by restarting the simulation UI for this participant
+    if (session.status === 'active') {
       simStarted = false;
-      startSimulation();
+      startSimulation(engineState || participant.engineState || null);
       return;
     }
 
@@ -222,11 +221,41 @@
       if (session.status === 'active' && views.waiting.classList.contains('active')) {
         startSimulation();
       }
+      if (session.status === 'completed' && role === 'student' && !views.complete.classList.contains('active') && !views.login.classList.contains('active')) {
+        // Trainer force-completed — pull our finalized row
+        const me = (session.participants || []).find(p => p.id === participantId);
+        if (me && me.status === 'Completed') {
+          lastCompleteData = {
+            finalScore: me.finalScore,
+            percentage: me.percentage,
+            questionsAttempted: me.questionsAttempted,
+            correctCount: me.correctCount,
+            incorrectCount: me.incorrectCount,
+            timeTaken: me.timeTaken,
+            report: me.report || { correct: [], incorrect: [], learningSummary: '' }
+          };
+          saveLocalSession();
+          renderStudentCompletion(session, lastCompleteData);
+          showView('complete');
+        }
+      }
       if (views.complete.classList.contains('active')) {
         renderStudentCompletion(session, lastCompleteData);
       }
     } else if (role === 'trainer') {
       renderTrainerDashboard(session);
+    }
+  });
+
+  socket.on('session:forceCompleted', () => {
+    if (role !== 'student') return;
+    if (window.SimulationEngine && typeof window.SimulationEngine.exportProgressSnapshot === 'function' && views.sim.classList.contains('active')) {
+      const snap = window.SimulationEngine.exportProgressSnapshot();
+      lastCompleteData = snap;
+      socket.emit('student:complete', snap);
+      renderStudentCompletion(sessionData, snap);
+      showView('complete');
+      saveLocalSession();
     }
   });
 
@@ -245,7 +274,7 @@
 
   socket.on('error', ({ message }) => showError(message));
 
-  function startSimulation() {
+  function startSimulation(savedState) {
     if (simStarted) return;
     simStarted = true;
     showView('sim');
@@ -261,7 +290,7 @@
         renderStudentCompletion(sessionData, data);
         showView('complete');
       }
-    });
+    }, savedState || null);
   }
 
   function renderStudentCompletion(session, data) {
